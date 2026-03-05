@@ -37,6 +37,10 @@ from nif_enrich import (
     enrich_company,
     wait_for_available_slot,
     merge_enriched_data,
+    is_recently_timed_out,
+    log_timeout,
+    TimeoutError,
+    ENRICHMENT_TIMEOUT,
 )
 from db import test_connection, get_cursor
 from db_loader import is_db_available
@@ -177,7 +181,7 @@ def step_search(keywords: List[str], max_pages: int = 5) -> int:
     return total_found
 
 
-def step_enrich(limit: int = 0, force: bool = False) -> int:
+def step_enrich(limit: int = 0, force: bool = False, retry_timeouts: bool = False) -> int:
     """Step 3: Enrich companies with contact details"""
     print("🔄 Enriching companies with contact details...")
     
@@ -229,37 +233,53 @@ def step_enrich(limit: int = 0, force: bool = False) -> int:
     
     # Enrich
     enriched_count = 0
+    timeout_count = 0
     for i, company in enumerate(to_enrich, 1):
         nif = company.get("nif")
         name = company.get("name", "Unknown")
         
         print(f"\n[{i}/{len(to_enrich)}] {nif}: {name[:50]}")
         
+        # Skip if recently timed out (unless retry mode)
+        if not retry_timeouts and is_recently_timed_out(nif, hours=24):
+            print(f"   ⏭️  Skipping (timed out in last 24h)")
+            timeout_count += 1
+            continue
+        
         # Wait for available slot
         if not wait_for_available_slot(rate_limiter, verbose=False):
             print("   ⏸️  Rate limit reached, stopping enrichment")
             break
         
-        # Enrich
-        enriched = enrich_company(nif, api_key, rate_limiter)
-        
-        if enriched:
-            # Merge and save
-            merged = merge_enriched_data(company, enriched)
-            enriched_data["companies"][nif] = enriched
+        # Enrich with timeout protection
+        try:
+            enriched = enrich_company(nif, api_key, rate_limiter, company_name=name)
             
-            # Save after each successful enrichment
-            save_enriched_data(enriched_data)
-            
-            enriched_count += 1
-            
-            # Show progress
-            has_contact = "📞" if enriched.get("phone") or enriched.get("email") else "📭"
-            print(f"   ✅ Enriched {has_contact}")
-        else:
-            print(f"   ❌ No data found")
+            if enriched:
+                # Merge and save
+                merged = merge_enriched_data(company, enriched)
+                enriched_data["companies"][nif] = enriched
+                
+                # Save after each successful enrichment
+                save_enriched_data(enriched_data)
+                
+                enriched_count += 1
+                
+                # Show progress
+                has_contact = "📞" if enriched.get("phone") or enriched.get("email") else "📭"
+                print(f"   ✅ Enriched {has_contact}")
+            else:
+                print(f"   ❌ No data found")
+                
+        except TimeoutError:
+            print(f"   ⏱️  TIMEOUT after {ENRICHMENT_TIMEOUT}s - skipping")
+            log_timeout(nif, name)
+            timeout_count += 1
+            continue
     
     print(f"\n✅ Enriched {enriched_count}/{len(to_enrich)} companies")
+    if timeout_count > 0:
+        print(f"   ⏱️  {timeout_count} timed out (skipped)")
     return enriched_count
 
 
@@ -343,6 +363,7 @@ Examples:
     # Options
     parser.add_argument("--enrich-limit", type=int, default=0, help="Limit number of companies to enrich (0 = all available quota)")
     parser.add_argument("--enrich-force", action="store_true", help="Re-enrich already enriched companies")
+    parser.add_argument("--retry-timeouts", action="store_true", help="Retry timed out NIFs (ignores 24h skip)")
     parser.add_argument("--search-pages", type=int, default=5, help="Max pages per search keyword (default: 5)")
     parser.add_argument("--keywords", type=str, help="Custom search keywords (space-separated)")
     parser.add_argument("--no-check", action="store_true", help="Skip prerequisite checks")
@@ -397,7 +418,7 @@ Examples:
     if not args.skip_enrich and not args.search_only:
         current_step += 1
         print_step(current_step, total_steps, "Enriching companies")
-        enrich_count = step_enrich(limit=args.enrich_limit, force=args.enrich_force)
+        enrich_count = step_enrich(limit=args.enrich_limit, force=args.enrich_force, retry_timeouts=args.retry_timeouts)
     
     # Step 4: Sync to DB
     current_step += 1

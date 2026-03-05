@@ -8,19 +8,27 @@ Rate Limits (Free Tier):
 - 100 / Day (24 hours)
 - 10 / Hour
 - 1 / Minute
+
+Timeout Handling:
+- 30 second timeout per NIF enrichment
+- Skips stuck NIFs and continues
+- Logs timeouts to nif_timeouts.json for retry
 """
 
 import json
 import time
 import requests
+import signal
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from collections import defaultdict
+from functools import wraps
 
 DATA_DIR = Path(__file__).parent / "data"
 CONFIG_FILE = Path(__file__).parent / "nif_config.json"
 RATE_LIMIT_FILE = Path(__file__).parent / "nif_rate_limits.json"
+TIMEOUT_LOG_FILE = Path(__file__).parent / "nif_timeouts.json"
 
 # Rate limits (Free Tier)
 LIMITS = {
@@ -33,6 +41,50 @@ LIMITS = {
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 60  # seconds to wait after network error
+ENRICHMENT_TIMEOUT = 30  # seconds per NIF enrichment
+
+
+class TimeoutError(Exception):
+    """Custom timeout exception"""
+    pass
+
+
+def timeout_handler(signum, frame):
+    """Signal handler for timeout"""
+    raise TimeoutError("Enrichment timed out")
+
+
+def with_timeout(seconds):
+    """
+    Decorator to add timeout to a function (Unix/Linux only)
+    Falls back gracefully on Windows
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Try signal-based timeout (Unix/Linux)
+            try:
+                # Set signal handler
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(seconds)
+                
+                try:
+                    result = func(*args, **kwargs)
+                finally:
+                    # Cancel alarm and restore old handler
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                
+                return result
+                
+            except TimeoutError:
+                raise TimeoutError(f"Function {func.__name__} timed out after {seconds}s")
+            except ValueError:
+                # Signal not available (Windows), fall back to no timeout
+                return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
 
 
 class RateLimiter:
@@ -167,17 +219,56 @@ def save_config(config: dict):
         json.dump(config, f, indent=2)
 
 
-def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter) -> Optional[Dict[str, Any]]:
+def load_timeout_log() -> dict:
+    """Load log of timed out NIFs"""
+    if TIMEOUT_LOG_FILE.exists():
+        with open(TIMEOUT_LOG_FILE, "r") as f:
+            return json.load(f)
+    return {"timeouts": {}, "last_updated": None}
+
+
+def save_timeout_log(data: dict):
+    """Save timeout log"""
+    data["last_updated"] = datetime.now().isoformat()
+    with open(TIMEOUT_LOG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def log_timeout(nif: str, company_name: str = ""):
+    """Log a timed out NIF for later retry"""
+    log = load_timeout_log()
+    log["timeouts"][nif] = {
+        "name": company_name,
+        "timestamp": datetime.now().isoformat(),
+        "retry_count": log["timeouts"].get(nif, {}).get("retry_count", 0) + 1
+    }
+    save_timeout_log(log)
+
+
+def is_recently_timed_out(nif: str, hours: int = 24) -> bool:
+    """Check if NIF timed out recently (within specified hours)"""
+    log = load_timeout_log()
+    if nif not in log["timeouts"]:
+        return False
+    
+    timeout_time = datetime.fromisoformat(log["timeouts"][nif]["timestamp"])
+    return datetime.now() - timeout_time < timedelta(hours=hours)
+
+
+@with_timeout(ENRICHMENT_TIMEOUT)
+def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter, company_name: str = "") -> Optional[Dict[str, Any]]:
     """
     Fetch company details from NIF.pt API
     
     Returns enriched data or None if failed
+    
+    Timeout: 30 seconds per NIF
     """
     url = f"http://www.nif.pt/?json=1&q={nif}&key={api_key}"
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=25)  # Slightly less than overall timeout
             response.raise_for_status()
             
             # Record this request for rate limiting
@@ -464,7 +555,38 @@ def main():
                         help="Show rate limit status only")
     parser.add_argument("--reset", action="store_true",
                         help="Reset rate limit tracking")
+    parser.add_argument("--show-timeouts", action="store_true",
+                        help="Show timed out NIFs")
+    parser.add_argument("--retry-timeouts", action="store_true",
+                        help="Retry timed out NIFs (ignores 24h skip)")
+    parser.add_argument("--clear-timeouts", action="store_true",
+                        help="Clear timeout log")
     args = parser.parse_args()
+    
+    # Clear timeout log
+    if args.clear_timeouts:
+        print("🗑️  Clearing timeout log...")
+        if TIMEOUT_LOG_FILE.exists():
+            TIMEOUT_LOG_FILE.unlink()
+            print("✅ Timeout log cleared")
+        else:
+            print("ℹ️  No timeout log to clear")
+        return
+    
+    # Show timeouts
+    if args.show_timeouts:
+        print("⏱️  Timed Out NIFs\n")
+        log = load_timeout_log()
+        if not log["timeouts"]:
+            print("   No timeouts recorded")
+        else:
+            for nif, info in log["timeouts"].items():
+                timestamp = info["timestamp"][:19]
+                retry_count = info.get("retry_count", 0)
+                name = info.get("name", "Unknown")[:40]
+                print(f"   {nif} | {timestamp} | retries: {retry_count} | {name}")
+        print(f"\n   Total: {len(log['timeouts'])} timed out NIFs")
+        return
     
     # Reset mode
     if args.reset:
@@ -606,6 +728,13 @@ def main():
         nif = company["nif"]
         name = company.get("name", "Unknown")[:40]
         
+        # Skip if recently timed out (unless retry mode)
+        if not args.retry_timeouts and is_recently_timed_out(nif, hours=24):
+            print(f"\n[{i}/{len(to_enrich)}] {nif} - {name}...")
+            print(f"   ⏭️  Skipping (timed out in last 24h)")
+            fail_count += 1
+            continue
+        
         # Wait for available slot (respects rate limits)
         if not wait_for_available_slot(rate_limiter):
             print(f"\n❌ Rate limit exhausted. Stopping at {i-1}/{len(to_enrich)}")
@@ -613,23 +742,30 @@ def main():
         
         print(f"\n[{i}/{len(to_enrich)}] {nif} - {name}...")
         
-        enriched = enrich_company(nif, api_key, rate_limiter)
-        
-        if enriched:
-            # Merge with original data
-            merged = merge_enriched_data(company, enriched)
-            enriched_data["companies"][nif] = merged
-            success_count += 1
+        try:
+            enriched = enrich_company(nif, api_key, rate_limiter, company_name=name)
             
-            # Show key enriched fields
-            if enriched.get("address"):
-                print(f"   📍 {enriched.get('address')}, {enriched.get('city', '')}")
-            if enriched.get("phone"):
-                print(f"   📞 {enriched.get('phone')}")
-            if enriched.get("email"):
-                print(f"   ✉️  {enriched.get('email')}")
-        else:
+            if enriched:
+                # Merge with original data
+                merged = merge_enriched_data(company, enriched)
+                enriched_data["companies"][nif] = merged
+                success_count += 1
+                
+                # Show key enriched fields
+                if enriched.get("address"):
+                    print(f"   📍 {enriched.get('address')}, {enriched.get('city', '')}")
+                if enriched.get("phone"):
+                    print(f"   📞 {enriched.get('phone')}")
+                if enriched.get("email"):
+                    print(f"   ✉️  {enriched.get('email')}")
+            else:
+                fail_count += 1
+                
+        except TimeoutError as e:
+            print(f"   ⏱️  TIMEOUT after {ENRICHMENT_TIMEOUT}s - skipping")
+            log_timeout(nif, name)
             fail_count += 1
+            continue
         
         # Save progress every 10 companies
         if i % 10 == 0:
