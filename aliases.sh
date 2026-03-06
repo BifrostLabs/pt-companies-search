@@ -29,6 +29,7 @@ alias pt-db-psql='cd $PT_COMPANIES_DIR && docker-compose -f docker-compose.postg
 alias pt-db-migrate='cd $PT_COMPANIES_DIR && uv run python migrate_to_db.py'
 alias pt-db-test='cd $PT_COMPANIES_DIR && uv run python db.py'
 alias pt-db-sync='cd $PT_COMPANIES_DIR && uv run python db_enrich_sync.py'
+alias pt-db-sync-search='cd $PT_COMPANIES_DIR && uv run python sync_search_to_db.py'
 
 # View latest data
 alias pt-latest='cat $PT_COMPANIES_DIR/data/companies_*.json | jq -r ".companies[:10] | .[] | \"\(.nif) | \(.date) | \(.name)\"" 2>/dev/null || echo "Run pt-scrape first"'
