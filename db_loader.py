@@ -141,11 +141,19 @@ def get_search_dataframe() -> pd.DataFrame:
             from db import get_connection
             with get_connection() as conn:
                 df = pd.read_sql("""
-                    SELECT nif, name, location, url, city, postal_code, sector
+                    SELECT nif, name, source_url as url, city, postal_code, sector
                     FROM companies 
                     WHERE source = 'nif_search'
                     ORDER BY fetched_at DESC
                 """, conn)
+                
+                # Add location column (derived from postal_code and city)
+                if not df.empty:
+                    df['location'] = df.apply(
+                        lambda row: f"{row['postal_code']} {row['city']}".strip() if row['postal_code'] or row['city'] else 'N/A',
+                        axis=1
+                    )
+                
                 return df
         except Exception as e:
             print(f"DB error, falling back to JSON: {e}")
