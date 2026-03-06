@@ -2,6 +2,7 @@
 """
 NIF.pt - Dados de Empresas
 Uses database when available, falls back to JSON
+Auto-refreshes every 30 seconds
 """
 
 import streamlit as st
@@ -20,6 +21,37 @@ from db_loader import (
     is_db_available,
     SECTORS,
 )
+
+# Auto-refresh every 30 seconds
+REFRESH_INTERVAL = 30
+
+# Add auto-refresh via meta tag
+st.markdown(f"""
+    <meta http-equiv="refresh" content="{REFRESH_INTERVAL}">
+    <style>
+        .refresh-indicator {{
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #1A1D24;
+            color: #FAFAFA;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 999;
+            border: 1px solid #333;
+        }}
+        .db-indicator {{
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }}
+        .db-online {{ background: #00C851; }}
+        .db-offline {{ background: #ff4444; }}
+    </style>
+""", unsafe_allow_html=True)
 
 # Config
 st.set_page_config(
@@ -295,6 +327,17 @@ def render_search_tab(df, filters):
 
 
 def main():
+    # Show refresh indicator
+    db_status = "online" if is_db_available() else "offline"
+    db_icon = "🗄️" if is_db_available() else "📁"
+    st.markdown(f"""
+        <div class="refresh-indicator">
+            <span class="db-indicator db-{db_status}"></span>
+            {db_icon} {'PostgreSQL' if is_db_available() else 'JSON Mode'} | 
+            🔄 Auto-refresh: {REFRESH_INTERVAL}s
+        </div>
+    """, unsafe_allow_html=True)
+    
     # Center content
     _, col_main, _ = st.columns([0.05, 0.9, 0.05])
     
@@ -302,11 +345,17 @@ def main():
         st.title("📊 NIF.pt - Dados de Empresas")
         st.markdown("Empresas pesquisadas e enriquecidas via [NIF.pt](https://www.nif.pt)")
         
+        # Show last update time
+        st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
+        
         # Database status
         if is_db_available():
             st.sidebar.success("🗄️ PostgreSQL")
         else:
             st.sidebar.info("📁 JSON")
+        
+        # Clear cache to force fresh data
+        st.cache_data.clear()
         
         # Load data (auto-refreshes with DB)
         df_enriched = get_enriched_dataframe()

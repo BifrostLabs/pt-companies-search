@@ -3,11 +3,13 @@
 Portugal New Companies - Dashboard
 Main entry point with home page as dashboard
 Uses PostgreSQL when available, falls back to JSON
+Auto-refreshes every 30 seconds
 """
 
 import streamlit as st
 from pathlib import Path
 from datetime import datetime
+import time
 
 # Import database loader
 from db_loader import get_stats, is_db_available
@@ -16,12 +18,55 @@ from db_loader import get_stats, is_db_available
 st.set_page_config(
     page_title="Novas Empresas Portugal",
     page_icon="🇵🇹",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# Auto-refresh every 30 seconds
+REFRESH_INTERVAL = 30
+
+# Add auto-refresh via meta tag
+st.markdown(f"""
+    <meta http-equiv="refresh" content="{REFRESH_INTERVAL}">
+    <style>
+        .refresh-indicator {{
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #1A1D24;
+            color: #FAFAFA;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 999;
+            border: 1px solid #333;
+        }}
+        .db-indicator {{
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }}
+        .db-online {{ background: #00C851; }}
+        .db-offline {{ background: #ff4444; }}
+    </style>
+""", unsafe_allow_html=True)
 
 
 def home():
     """Home page - Dashboard Overview"""
+    
+    # Show refresh indicator
+    db_status = "online" if is_db_available() else "offline"
+    db_icon = "🗄️" if is_db_available() else "📁"
+    st.markdown(f"""
+        <div class="refresh-indicator">
+            <span class="db-indicator db-{db_status}"></span>
+            {db_icon} {'PostgreSQL' if is_db_available() else 'JSON Mode'} | 
+            🔄 Auto-refresh: {REFRESH_INTERVAL}s
+        </div>
+    """, unsafe_allow_html=True)
     
     # Center content
     _, col_main, _ = st.columns([0.05, 0.9, 0.05])
@@ -31,7 +76,13 @@ def home():
         st.title("🇵🇹 Novas Empresas")
         st.markdown("### Sistema de Rastreamento e Enriquecimento de Empresas")
         
+        # Show last update time
+        st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
+        
         st.markdown("---")
+        
+        # Clear cache to force fresh data
+        st.cache_data.clear()
         
         # Statistics (auto-loads from DB or JSON)
         stats = get_stats()

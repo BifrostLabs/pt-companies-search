@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 eInforma.pt - Novas Empresas
+Uses database when available, falls back to JSON
+Auto-refreshes every 30 seconds
 """
 
-import json
-import glob
-import pandas as pd
 import streamlit as st
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import sys
@@ -14,10 +14,44 @@ import sys
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Import database loader
+from db_loader import get_einforma_dataframe, load_enriched_data, is_db_available
+
 # Config
 DATA_DIR = Path(__file__).parent.parent / "data"
 
-# Standard sector definitions (same as NIF.pt page)
+# Auto-refresh every 30 seconds
+REFRESH_INTERVAL = 30
+
+# Add auto-refresh via meta tag
+st.markdown(f"""
+    <meta http-equiv="refresh" content="{REFRESH_INTERVAL}">
+    <style>
+        .refresh-indicator {{
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #1A1D24;
+            color: #FAFAFA;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 999;
+            border: 1px solid #333;
+        }}
+        .db-indicator {{
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }}
+        .db-online {{ background: #00C851; }}
+        .db-offline {{ background: #ff4444; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# Standard sector definitions
 SECTORS = {
     "🏗️ Construção": ["CONSTRUÇÕES", "CONSTRUÇÃO", "CONSTRUCTION", "OBRAS", "REMODELAÇÕES", "CIVIL"],
     "💻 Tecnologia/TI": ["TECH", "DIGITAL", "SOFTWARE", "INFORMÁTICA", "COMPUTER", "TECNOLOGIA", "IT ", "SISTEMAS"],
@@ -29,6 +63,8 @@ SECTORS = {
 
 def get_sector(name):
     """Classify company into sector"""
+    if not name:
+        return "Outro"
     name_upper = name.upper()
     for sector, keywords in SECTORS.items():
         if any(kw in name_upper for kw in keywords):
@@ -36,49 +72,24 @@ def get_sector(name):
     return "Outro"
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_data():
-    """Load the latest company data"""
-    files = sorted(glob.glob(str(DATA_DIR / "companies_*.json")), reverse=True)
-    if not files:
-        return None, None
+    """Load data from database or JSON"""
+    # Clear cache to force fresh data
+    df = get_einforma_dataframe(use_historical=True)
     
-    # Exclude enriched and historical files
-    files = [f for f in files if "_enriched" not in f and "_historical" not in f]
-    if not files:
-        return None, None
+    if df.empty:
+        return None
     
-    latest = files[0]
-    with open(latest, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    # Load enriched data
+    enriched_data = load_enriched_data()
     
-    return data, latest
-
-
-@st.cache_data(ttl=60)
-def load_historical_data():
-    """Load accumulated historical data"""
-    historical_file = DATA_DIR / "companies_historical.json"
-    if historical_file.exists():
-        with open(historical_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
-
-
-@st.cache_data(ttl=60)
-def load_enriched_data():
-    """Load enriched company data from NIF.pt API"""
-    enriched_file = DATA_DIR / "companies_enriched.json"
-    if enriched_file.exists():
-        with open(enriched_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("companies", {})
-    return {}
+    return df, enriched_data
 
 
 def merge_enriched_data(df, enriched_dict):
     """Merge enriched data into dataframe"""
-    if not enriched_dict:
+    if not enriched_dict or df.empty:
         return df
     
     enriched_rows = []
@@ -205,6 +216,17 @@ def apply_filters(df, filters, enriched_data):
 
 
 def main():
+    # Show refresh indicator
+    db_status = "online" if is_db_available() else "offline"
+    db_icon = "🗄️" if is_db_available() else "📁"
+    st.markdown(f"""
+        <div class="refresh-indicator">
+            <span class="db-indicator db-{db_status}"></span>
+            {db_icon} {'PostgreSQL' if is_db_available() else 'JSON Mode'} | 
+            🔄 Auto-refresh: {REFRESH_INTERVAL}s
+        </div>
+    """, unsafe_allow_html=True)
+    
     # Center content
     _, col_main, _ = st.columns([0.05, 0.9, 0.05])
     
@@ -212,43 +234,33 @@ def main():
         st.title("📋 eInforma.pt - Novas Empresas")
         st.markdown("Empresas recém-registradas em Portugal")
         
+        # Show last update time
+        st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
+        
         st.markdown("---")
         
-        # Load data
-        data, data_file = load_data()
+        # Load data (from database or JSON)
+        result = load_data()
         
-        if not data:
+        if not result or result[0].empty:
             st.error("Nenhum dado encontrado. Execute `pt-scrape` primeiro.")
             st.stop()
         
-        companies = data["companies"]
-        df = pd.DataFrame(companies)
-        df["date_obj"] = pd.to_datetime(df["date"], format="%d-%m-%Y").dt.date
+        df, enriched_data = result
         
-        # Load enriched data
-        enriched_data = load_enriched_data()
+        # Convert registration_date to date_obj for filtering
+        if "registration_date" in df.columns:
+            df["date_obj"] = pd.to_datetime(df["registration_date"], errors="coerce").dt.date
+            df["date"] = df["registration_date"].apply(lambda x: x.strftime("%d-%m-%Y") if pd.notna(x) else "")
+        else:
+            df["date_obj"] = None
+        
+        # Merge enriched data
         if enriched_data:
             df = merge_enriched_data(df, enriched_data)
         
-        # Check for historical data
-        historical_data = load_historical_data()
-        has_historical = historical_data and historical_data.get("companies")
-        
-        # Render sidebar
-        filters = render_compact_sidebar(df, enriched_data, has_historical)
-        
-        # Handle historical data selection
-        if filters["use_historical"] and has_historical:
-            hist_companies = list(historical_data["companies"].values())
-            df = pd.DataFrame(hist_companies)
-            df["date_obj"] = pd.to_datetime(df["date"], format="%d-%m-%Y", errors="coerce").dt.date
-            
-            if filters["selected_year"] != "Todos":
-                year_int = int(filters["selected_year"])
-                df = df[df["date_obj"].apply(lambda x: x.year if pd.notna(x) else 0) == year_int]
-            
-            if enriched_data:
-                df = merge_enriched_data(df, enriched_data)
+        # Render sidebar (simplified - no historical option for now)
+        filters = render_compact_sidebar(df, enriched_data, has_historical=False)
         
         # Apply filters
         filtered_df = apply_filters(df, filters, enriched_data)
@@ -260,13 +272,13 @@ def main():
         with col2:
             st.metric("Filtradas", len(filtered_df))
         with col3:
-            st.metric("Datas", df["date"].nunique())
+            st.metric("Datas", df["date"].nunique() if "date" in df.columns else 0)
         with col4:
             if enriched_data:
                 enriched_count = len([nif for nif in filtered_df["nif"] if nif in enriched_data])
                 st.metric("Enriquecidas", enriched_count)
             else:
-                st.metric("Atualizado", data.get("fetch_date", "N/A")[:10])
+                st.metric("Modo", "PostgreSQL" if is_db_available() else "JSON")
         
         st.markdown("---")
         
