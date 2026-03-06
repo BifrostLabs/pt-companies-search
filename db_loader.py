@@ -235,6 +235,49 @@ def get_einforma_dataframe(use_historical: bool = True, year: Optional[int] = No
     return df
 
 
+def load_enriched_data() -> Dict:
+    """
+    Load enriched data as dict (from DB or JSON)
+    Returns dict keyed by NIF with enriched data
+    """
+    if DB_AVAILABLE:
+        try:
+            with get_connection() as conn:
+                import pandas as pd
+                df = pd.read_sql("""
+                    SELECT nif, name, phone, email, website, address, 
+                           city, postal_code, region, county, parish,
+                           cae, activity_description as activity, status
+                    FROM companies 
+                    WHERE source = 'nif_api'
+                """, conn)
+                
+                # Convert to dict format
+                result = {}
+                for _, row in df.iterrows():
+                    result[row['nif']] = {
+                        "name": row['name'],
+                        "phone": row['phone'],
+                        "email": row['email'],
+                        "website": row['website'],
+                        "address": row['address'],
+                        "city": row['city'],
+                        "postal_code": row['postal_code'],
+                        "region": row['region'],
+                        "county": row['county'],
+                        "parish": row['parish'],
+                        "cae": row['cae'],
+                        "activity": row['activity'],
+                        "status": row['status'],
+                    }
+                return result
+        except Exception as e:
+            print(f"DB error, falling back to JSON: {e}")
+    
+    # Fallback to JSON
+    return load_json_enriched()
+
+
 def get_stats() -> Dict[str, int]:
     """Get dashboard statistics (from DB or JSON)"""
     stats = {
