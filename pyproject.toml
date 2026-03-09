@@ -9,7 +9,10 @@ dependencies = [
     "psycopg2-binary",
     "streamlit",
     "pandas",
+    "plotly",
     "python-dotenv",
+    "beautifulsoup4",
+    "lxml",
 ]
 
 [project.scripts]
