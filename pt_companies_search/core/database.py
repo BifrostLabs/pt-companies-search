@@ -9,6 +9,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
+import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
 from psycopg2.pool import SimpleConnectionPool
