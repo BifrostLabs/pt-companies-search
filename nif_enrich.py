@@ -25,10 +25,10 @@ from typing import Optional, Dict, Any, List
 from collections import defaultdict
 from functools import wraps
 
-DATA_DIR = Path(__file__).parent / "data"
-CONFIG_FILE = Path(__file__).parent / "nif_config.json"
-RATE_LIMIT_FILE = Path(__file__).parent / "nif_rate_limits.json"
-TIMEOUT_LOG_FILE = Path(__file__).parent / "nif_timeouts.json"
+DATA_DIR = Path("/tmp/data")
+CONFIG_FILE = Path("/tmp/nif_config.json")
+RATE_LIMIT_FILE = Path("/tmp/nif_rate_limits.json")
+TIMEOUT_LOG_FILE = Path("/tmp/nif_timeouts.json")
 
 # Rate limits (Free Tier)
 LIMITS = {
@@ -451,17 +451,17 @@ def load_companies_to_enrich(source: str = "historical") -> list:
                 with get_connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute("""
-                            SELECT nif, name, source, created_at
+                            SELECT nif, name, source, fetched_at
                             FROM companies
                             WHERE nif IS NOT NULL
-                            ORDER BY created_at DESC
+                            ORDER BY fetched_at DESC
                         """)
                         for row in cur.fetchall():
                             companies.append({
                                 "nif": row[0],
                                 "name": row[1],
                                 "source": row[2],
-                                "created_at": row[3].isoformat() if row[3] else None
+                                "fetched_at": row[3].isoformat() if row[3] else None
                             })
                 return companies
             except Exception as e:
@@ -578,8 +578,7 @@ def save_enriched_to_db(companies: dict):
             print(f"🗄️  Saved {count} companies to PostgreSQL")
         
     except Exception as e:
-        # Don't fail if DB is not available
-        pass
+        print(f"❌ Database error: {e}")
 
 
 def merge_enriched_data(company: dict, enriched: dict) -> dict:
@@ -824,10 +823,9 @@ def main():
             fail_count += 1
             continue
         
-        # Save progress every 10 companies
-        if i % 10 == 0:
-            save_enriched_data(enriched_data)
-            rate_limiter.display_status()
+        # Save progress after every company for immediate feedback
+        save_enriched_data(enriched_data)
+        rate_limiter.display_status()
     
     # Final save
     save_enriched_data(enriched_data)
