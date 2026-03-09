@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NIF.pt - Dados de Empresas
+NIF.pt - Dados de Empresas (Refactored UI/UX)
 """
 
 import streamlit as st
@@ -8,32 +8,27 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 
-from pt_companies_search.core.database import (
-    is_db_available, get_enriched_dataframe, get_search_dataframe, get_stats
+# Check connection and imports
+try:
+    from pt_companies_search.core.database import (
+        is_db_available, get_enriched_dataframe, get_search_dataframe, get_stats
+    )
+    from pt_companies_search.dashboard.components.styles import apply_custom_styles
+    from pt_companies_search.dashboard.components.cards import metric_card
+except ImportError as e:
+    st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
+    st.stop()
+
+# Config
+st.set_page_config(
+    page_title="NIF.pt - PT Companies",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Standard sector definitions
-SECTORS = {
-    "🏗️ Construção": ["CONSTRUÇÕES", "CONSTRUÇÃO", "CONSTRUCTION", "OBRAS", "REMODELAÇÕES", "CIVIL"],
-    "💻 Tecnologia/TI": ["TECH", "DIGITAL", "SOFTWARE", "INFORMÁTICA", "COMPUTER", "TECNOLOGIA", "IT ", "SISTEMAS"],
-    "🍽️ Alimentação": ["FOOD", "RESTAURANTE", "CAFÉ", "BAR ", "HOTEL", "TURISMO", "RESTAURAÇÃO", "ALIMENTAÇÃO"],
-    "🏠 Imobiliário": ["IMOBILIÁRIA", "IMÓVEIS", "PROPERTY", "REAL ESTATE", "ALOJAMENTO", "MEDIÇÃO IMOBILIÁRIA"],
-    "💼 Consultoria": ["CONSULT", "CONSULTORIA", "SERVIÇOS", "GESTÃO", "ASSESSORIA"],
-}
-
-AUTO_REFRESH_ENABLED = False
-
-
-def get_sector(name: str) -> str:
-    """Classify company into sector"""
-    if not name:
-        return "Outro"
-    name_upper = name.upper()
-    for sector, keywords in SECTORS.items():
-        if any(kw in name_upper for kw in keywords):
-            return sector
-    return "Outro"
-
+# Apply global custom styles
+apply_custom_styles()
 
 @st.cache_data(ttl=3600)
 def load_data():
@@ -43,143 +38,183 @@ def load_data():
     stats = get_stats()
     return enriched_df, search_df, stats
 
+def render_sidebar():
+    """Render sidebar navigation/filters"""
+    with st.sidebar:
+        st.markdown("""
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h1 style="font-size: 32px; margin-bottom: 0;">📊</h1>
+                <h3 style="margin-top: 5px;">NIF.pt</h3>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        st.markdown("**🔍 Filters**")
+        search_query = st.text_input("Name/NIF Search", "", placeholder="Search...").lower()
+        
+        has_phone = st.checkbox("📞 With phone number")
+        has_email = st.checkbox("✉️ With email address")
+        has_website = st.checkbox("🌐 With website")
+        
+        st.markdown("---")
+        
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+            
+        st.markdown("---")
+        st.caption(f"Last heartbeat: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption("[NIF.pt](https://www.nif.pt)")
+
+    return {
+        "search": search_query,
+        "phone": has_phone,
+        "email": has_email,
+        "website": has_website
+    }
+
+def apply_filters(df, filters):
+    """Apply generic filters to dataframe"""
+    filtered_df = df.copy()
+    if filters["search"]:
+        mask = (
+            filtered_df["name"].str.lower().str.contains(filters["search"], na=False) |
+            filtered_df["nif"].str.lower().str.contains(filters["search"], na=False)
+        )
+        filtered_df = filtered_df[mask]
+    
+    if filters["phone"] and "phone" in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df["phone"].notna()]
+    if filters["email"] and "email" in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df["email"].notna()]
+    if filters["website"] and "website" in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df["website"].notna()]
+        
+    return filtered_df
 
 def main():
-    # Status indicator
-    db_status = "online" if is_db_available() else "offline"
-    db_icon = "🗄️" if is_db_available() else "📁"
-    st.markdown(f"""
-        <div style="position: fixed; top: 60px; right: 20px; background: #1A1D24; color: #FAFAFA; padding: 8px 16px; border-radius: 20px; font-size: 12px; z-index: 999; border: 1px solid #333;">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: {'#00C851' if is_db_available() else '#ff4444'};"></span>
-            {db_icon} {'PostgreSQL' if is_db_available() else 'JSON Mode'} | 🔄 Refresh: Off
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.title("📊 NIF.pt - Dados de Empresas")
-    st.markdown("Empresas enriquecidas via API e pesquisadas na base NIF.pt")
-    st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
-    
-    if st.button("🔄 Forçar Atualização de Dados"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    # Tabs
-    tab1, tab2 = st.tabs(["📦 Enriquecidos (API)", "🔍 Pesquisados (Scraped)"])
-    
+    # Header area
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.title("📊 NIF.pt - Dados de Empresas")
+        st.markdown("<p style='color: #8B949E; margin-top: -10px;'>Companies enriched via API and discovered through search.</p>", unsafe_allow_html=True)
+    with col_h2:
+        db_icon = "🗄️" if is_db_available() else "📁"
+        st.markdown(f"""
+            <div style="text-align: right; margin-top: 15px;">
+                <span class="status-pill {'status-online' if is_db_available() else 'status-offline'}">
+                    {db_icon} {'PostgreSQL Connected' if is_db_available() else 'Offline Mode'}
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # Load data
     enriched_df, search_df, stats = load_data()
     
+    # Render sidebar and get filters
+    filters = render_sidebar()
+    
+    # Tabs for different data sources
+    tab1, tab2 = st.tabs(["📦 Enriched Companies (API)", "🔍 Search Results (Scraped)"])
+    
     with tab1:
-        st.subheader("Empresas Enriquecidas via NIF.pt API")
-        
         if enriched_df.empty:
-            st.info("Nenhuma empresa enriquecida ainda. Execute o enricher.")
+            st.info("No companies enriched yet. Run the enricher script to populate this view.")
         else:
+            # Apply filters
+            filtered_enriched = apply_filters(enriched_df, filters)
+            
             # Metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Total", len(enriched_df))
+                metric_card("Total Enriched", f"{len(enriched_df):,}", icon="📦")
             with col2:
-                st.metric("Com Telefone", enriched_df["phone"].notna().sum())
+                phone_pct = (enriched_df["phone"].notna().sum() / len(enriched_df)) * 100
+                metric_card("Phone Coverage", f"{enriched_df['phone'].notna().sum():,}", subtitle=f"{phone_pct:.1f}%", icon="📞")
             with col3:
-                st.metric("Com Email", enriched_df["email"].notna().sum())
+                email_pct = (enriched_df["email"].notna().sum() / len(enriched_df)) * 100
+                metric_card("Email Coverage", f"{enriched_df['email'].notna().sum():,}", subtitle=f"{email_pct:.1f}%", icon="✉️")
             with col4:
-                st.metric("Com Website", enriched_df["website"].notna().sum())
+                metric_card("Results Found", f"{len(filtered_enriched):,}", icon="🔍")
             
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            # Sector chart
+            # Distribution Chart
             if "sector" in enriched_df.columns:
-                sector_counts = enriched_df["sector"].value_counts().reset_index()
-                sector_counts.columns = ["sector", "count"]
-                fig = px.bar(sector_counts.head(10), x="sector", y="count", title="Top 10 Setores")
+                sector_counts = enriched_df["sector"].value_counts().reset_index().head(10)
+                sector_counts.columns = ["Sector", "Count"]
+                fig = px.pie(sector_counts, values="Count", names="Sector", hole=0.4, title="Top 10 Enriched Sectors")
+                fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color='#FAFAFA', margin=dict(l=0, r=0, t=40, b=0), height=350)
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Filters
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                search = st.text_input("Buscar", "", placeholder="Nome ou NIF...").lower()
-            with col2:
-                has_phone = st.checkbox("Com telefone")
-            with col3:
-                has_email = st.checkbox("Com email")
-            
-            # Apply filters
-            filtered_df = enriched_df.copy()
-            if search:
-                mask = (
-                    filtered_df["name"].str.lower().str.contains(search, na=False) |
-                    filtered_df["nif"].str.contains(search, na=False)
-                )
-                filtered_df = filtered_df[mask]
-            if has_phone:
-                filtered_df = filtered_df[filtered_df["phone"].notna()]
-            if has_email:
-                filtered_df = filtered_df[filtered_df["email"].notna()]
-            
-            st.metric("Resultados", len(filtered_df))
-            
-            # Display
-            display_cols = ["nif", "name", "phone", "email", "website", "city", "sector"]
-            available_cols = [c for c in display_cols if c in filtered_df.columns]
-            st.dataframe(filtered_df[available_cols], use_container_width=True, height=500)
+            # Dataframe view
+            st.subheader("Data Explorer")
+            st.dataframe(
+                filtered_enriched,
+                column_config={
+                    "nif": "NIF",
+                    "name": "Company Name",
+                    "email": st.column_config.LinkColumn("Email"),
+                    "website": st.column_config.LinkColumn("Website"),
+                    "enriched_at": st.column_config.DatetimeColumn("Enriched At", format="DD/MM/YYYY HH:mm"),
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=500
+            )
             
             # Export
-            csv = filtered_df.to_csv(index=False).encode("utf-8")
+            csv = filtered_enriched.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "📄 Exportar CSV",
+                "📄 Export Enriched Results CSV",
                 csv,
-                f"empresas_enriquecidas_{datetime.now().strftime('%Y%m%d')}.csv",
-                "text/csv"
+                f"enriched_companies_{datetime.now().strftime('%Y%m%d')}.csv",
+                "text/csv",
+                use_container_width=True
             )
-    
+            
     with tab2:
-        st.subheader("Empresas Pesquisadas via NIF.pt")
-        
         if search_df.empty:
-            st.info("Nenhuma pesquisa realizada ainda. Execute o searcher.")
+            st.info("No search results found yet. Run the searcher script to populate this view.")
         else:
+            # Apply filters
+            filtered_search = apply_filters(search_df, filters)
+            
             # Metrics
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Total", len(search_df))
+                metric_card("Total Discovered", f"{len(search_df):,}", icon="🔍")
             with col2:
-                st.metric("Com Telefone", search_df["phone"].notna().sum() if "phone" in search_df.columns else 0)
+                metric_card("Total in Results", f"{len(filtered_search):,}", icon="📊")
             with col3:
-                st.metric("Com Email", search_df["email"].notna().sum() if "email" in search_df.columns else 0)
+                metric_card("Unique Cities", f"{search_df['city'].nunique() if 'city' in search_df.columns else 0}", icon="📍")
+                
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            st.markdown("---")
-            
-            # Search filter
-            search_query = st.text_input("Buscar", "", placeholder="Nome da empresa...", key="search_tab2").lower()
-            
-            filtered_df = search_df.copy()
-            if search_query:
-                filtered_df = filtered_df[filtered_df["name"].str.lower().str.contains(search_query, na=False)]
-            
-            st.metric("Resultados", len(filtered_df))
-            
-            # Display
-            display_cols = ["nif", "name", "city", "region", "sector", "fetched_at"]
-            available_cols = [c for c in display_cols if c in filtered_df.columns]
-            st.dataframe(filtered_df[available_cols], use_container_width=True, height=500)
+            # Dataframe view
+            st.subheader("Data Explorer")
+            st.dataframe(
+                filtered_search,
+                column_config={
+                    "nif": "NIF",
+                    "name": "Company Name",
+                    "fetched_at": st.column_config.DatetimeColumn("Discovered At", format="DD/MM/YYYY HH:mm"),
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=500
+            )
             
             # Export
-            csv = filtered_df.to_csv(index=False).encode("utf-8")
+            csv = filtered_search.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "📄 Exportar CSV",
+                "📄 Export Search Results CSV",
                 csv,
-                f"empresas_pesquisadas_{datetime.now().strftime('%Y%m%d')}.csv",
-                "text/csv"
+                f"search_results_{datetime.now().strftime('%Y%m%d')}.csv",
+                "text/csv",
+                use_container_width=True
             )
-    
-    # Sidebar
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🔄 Atualizar", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-    
-    st.sidebar.caption(f"📅 {datetime.now().strftime('%d/%m %H:%M')}")
-    st.sidebar.caption("[NIF.pt](https://www.nif.pt)")
 
-
-main()
+if __name__ == "__main__":
+    main()
