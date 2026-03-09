@@ -37,7 +37,16 @@ def get_pool() -> SimpleConnectionPool:
 
 @contextmanager
 def get_connection():
-    """Get a connection from the pool"""
+    """
+    Get a connection from the pool (NO transaction handling).
+    
+    ⚠️  WARNING: This does NOT automatically commit/rollback!
+    For writes, use get_cursor() or transaction() instead.
+    Only use this for:
+    - Read-only queries
+    - Manual transaction control
+    - When you need the raw connection
+    """
     pool = get_pool()
     conn = pool.getconn()
     try:
@@ -47,17 +56,46 @@ def get_connection():
 
 
 @contextmanager
+def transaction():
+    """
+    Get a connection with AUTOMATIC transaction handling.
+    
+    ✅ Commits on success
+    ❌ Rolls back on exception
+    
+    Example:
+        with transaction() as conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO companies ...")
+                # Auto-commits here
+    """
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+        conn.commit()  # ✅ Auto-commit on success
+    except Exception:
+        conn.rollback()  # ❌ Auto-rollback on error
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@contextmanager
 def get_cursor(dict_cursor=True):
-    """Get a cursor with automatic cleanup"""
-    with get_connection() as conn:
+    """
+    Get a cursor with automatic transaction handling.
+    
+    ✅ Commits on success
+    ❌ Rolls back on exception
+    
+    This is the RECOMMENDED way for most queries.
+    """
+    with transaction() as conn:
         cursor_factory = RealDictCursor if dict_cursor else None
         with conn.cursor(cursor_factory=cursor_factory) as cur:
-            try:
-                yield cur
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+            yield cur
+            # transaction() handles commit/rollback
 
 
 def test_connection() -> bool:

@@ -216,10 +216,10 @@ def save_to_json(companies: List[Dict], query: str) -> Path:
 def save_to_database(companies: List[Dict]) -> int:
     """Save search results to PostgreSQL database"""
     try:
-        from db import get_connection
+        from db import transaction
         
         count = 0
-        with get_connection() as conn:
+        with transaction() as conn:
             with conn.cursor() as cur:
                 for company in companies:
                     nif = company.get("nif")
@@ -246,6 +246,8 @@ def save_to_database(companies: List[Dict]) -> int:
                             last_verified_at = NOW()
                     """, (nif, name, 'nif_search', url, city, postal_code, sector))
                     count += 1
+                
+                # ✅ FIX: transaction() auto-commits!
         
         print(f"🗄️ Saved {count} companies to PostgreSQL")
         return count
