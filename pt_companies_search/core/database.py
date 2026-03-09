@@ -437,3 +437,94 @@ def log_enrichment(nif: str, source: str, status: str, error_message: str = None
     except Exception as e:
         print(f"Error logging enrichment: {e}")
         return False
+
+
+# ==================== DASHBOARD HELPERS ====================
+
+def is_db_available() -> bool:
+    """Check if database is available (alias for test_connection)"""
+    return test_connection()
+
+
+def get_einforma_dataframe(use_historical: bool = False) -> pd.DataFrame:
+    """Get eInforma companies as DataFrame"""
+    import pandas as pd
+    sql = """
+    SELECT nif, name, source, source_url, registration_date, 
+           phone, email, website, address, city, postal_code, region
+    FROM companies 
+    WHERE source = 'einforma' OR source = 'debug'
+    ORDER BY registration_date DESC
+    """
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql(sql, conn)
+            return df
+    except Exception as e:
+        print(f"Error loading einforma data: {e}")
+        return pd.DataFrame()
+
+
+def get_enriched_dataframe() -> pd.DataFrame:
+    """Get enriched companies as DataFrame"""
+    import pandas as pd
+    sql = """
+    SELECT nif, name, phone, email, website, address, 
+           city, postal_code, region, county, parish,
+           cae, activity_description, sector, status, enriched_at
+    FROM companies 
+    WHERE enriched_at IS NOT NULL
+    ORDER BY enriched_at DESC
+    """
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql(sql, conn)
+            return df
+    except Exception as e:
+        print(f"Error loading enriched data: {e}")
+        return pd.DataFrame()
+
+
+def get_search_dataframe() -> pd.DataFrame:
+    """Get search results as DataFrame"""
+    import pandas as pd
+    sql = """
+    SELECT nif, name, source, source_url, phone, email, website, 
+           address, city, postal_code, region, sector, fetched_at
+    FROM companies 
+    WHERE source = 'nif_search'
+    ORDER BY fetched_at DESC
+    """
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql(sql, conn)
+            return df
+    except Exception as e:
+        print(f"Error loading search data: {e}")
+        return pd.DataFrame()
+
+
+def load_enriched_data() -> Dict[str, Dict]:
+    """Load enriched data as dict keyed by NIF"""
+    sql = """
+    SELECT nif, phone, email, website, address, city, postal_code,
+           region, county, parish, cae, activity_description, status
+    FROM companies 
+    WHERE enriched_at IS NOT NULL
+    """
+    try:
+        with get_cursor() as cur:
+            cur.execute(sql)
+            results = {}
+            for row in cur.fetchall():
+                nif = row.pop('nif')
+                results[nif] = dict(row)
+            return results
+    except Exception as e:
+        print(f"Error loading enriched data: {e}")
+        return {}
+
+
+def get_stats() -> Dict[str, Any]:
+    """Get overall statistics"""
+    return get_contact_coverage()
