@@ -39,12 +39,6 @@ def health_check():
 def run_health_server():
     uvicorn.run(health_app, host="0.0.0.0", port=8001)
 
-# Start health server in a separate thread if not already running
-if "health_started" not in st.session_state:
-    thread = threading.Thread(target=run_health_server, daemon=True)
-    thread.start()
-    st.session_state["health_started"] = True
-
 # --- Streamlit Page Config ---
 st.set_page_config(
     page_title="PT Companies Dashboard",
@@ -186,6 +180,13 @@ def main_dashboard():
     st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.1.0-polars")
 
 def main():
+    # Start health server in a separate thread if not already running
+    # This must be run inside a function where session_state is available
+    if "health_started" not in st.session_state:
+        thread = threading.Thread(target=run_health_server, daemon=True)
+        thread.start()
+        st.session_state["health_started"] = True
+
     # Simple Auth State
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
