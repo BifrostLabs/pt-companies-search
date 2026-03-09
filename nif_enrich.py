@@ -227,10 +227,20 @@ class RateLimiter:
 
 def load_config() -> dict:
     """Load NIF.pt API configuration"""
+    import os
+    
+    # Try loading from config file
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {"api_key": "", "last_run": None, "credits_used": 0}
+            config = json.load(f)
+    else:
+        config = {"api_key": "", "last_run": None, "credits_used": 0}
+    
+    # Override with environment variable if set
+    if os.environ.get("NIF_API_KEY"):
+        config["api_key"] = os.environ["NIF_API_KEY"]
+    
+    return config
 
 
 def save_config(config: dict):
@@ -284,8 +294,9 @@ def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter, company_na
     
     Timeout: 30 seconds per NIF
     """
-    # Use WebService endpoint for API key
-    url = f"https://www.nif.pt/api/?key={api_key}&nif={nif}"
+    # Use correct NIF.pt API endpoint format
+    # Format: http://www.nif.pt/?json=1&q={NIF}&key={API_KEY}
+    url = f"http://www.nif.pt/?json=1&q={nif}&key={api_key}"
     
     for attempt in range(MAX_RETRIES):
         try:
@@ -432,6 +443,30 @@ def load_companies_to_enrich(source: str = "historical") -> list:
             with open(historical_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return list(data.get("companies", {}).values())
+        else:
+            # Try loading from database if JSON doesn't exist
+            try:
+                from db import get_connection
+                companies = []
+                with get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            SELECT nif, name, source, created_at
+                            FROM companies
+                            WHERE nif IS NOT NULL
+                            ORDER BY created_at DESC
+                        """)
+                        for row in cur.fetchall():
+                            companies.append({
+                                "nif": row[0],
+                                "name": row[1],
+                                "source": row[2],
+                                "created_at": row[3].isoformat() if row[3] else None
+                            })
+                return companies
+            except Exception as e:
+                print(f"⚠️  Failed to load from database: {e}")
+                return []
     else:
         # Find latest snapshot
         import glob
