@@ -11,6 +11,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import threading
 
+print("--- HEALTH: Script execution started ---", flush=True)
+
 # --- Streamlit Page Config (MUST BE FIRST) ---
 st.set_page_config(
     page_title="PT Companies Dashboard",
