@@ -53,25 +53,30 @@ jobs:
               - 'db_loader.py'
               - 'db.py'
               - 'requirements.txt'
+              - 'docker/Dockerfile.dashboard'
             scraper:
               - 'scraper.py'
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'docker/Dockerfile.scraper'
             enricher:
               - 'nif_enrich.py'
               - 'enrich_api.py'
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'docker/Dockerfile.enricher'
             searcher:
               - 'nif_search.py'
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'docker/Dockerfile.searcher'
             any-python:
               - '**.py'
               - 'requirements.txt'
+              - 'docker/**'
 
   # Build Docker images
   build:
