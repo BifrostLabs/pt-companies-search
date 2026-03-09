@@ -116,15 +116,11 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Download Dockerfile
-        run: |
-          curl -sL "https://raw.githubusercontent.com/${{ env.HELM_CHARTS_REPO }}/main/charts/pt-companies/files/${{ matrix.component.dockerfile }}" -o Dockerfile
-
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./docker/${{ matrix.component.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
