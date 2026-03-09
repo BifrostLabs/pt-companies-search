@@ -9,22 +9,50 @@ from datetime import datetime
 import plotly.express as px
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import threading
+
+# --- Streamlit Page Config (MUST BE FIRST) ---
+st.set_page_config(
+    page_title="PT Companies Dashboard",
+    page_icon="🇵🇹",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Check connection and imports (AFTER page config)
+try:
+    from pt_companies_search.core.database import (
+        test_connection, get_contact_coverage, get_sector_stats,
+        get_source_stats, get_region_stats, is_db_available
+    )
+    from pt_companies_search.dashboard.components.styles import apply_custom_styles
+    from pt_companies_search.dashboard.components.cards import metric_card, timeline_event
+except ImportError as e:
+    st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
+    st.stop()
+
+# Apply global custom styles (AFTER page config)
+apply_custom_styles()
 
 # --- Health Endpoint (http.server) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
-            db_status = "connected" if test_connection() else "disconnected"
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {
-                "status": "healthy",
-                "db": db_status,
-                "version": "2.2.0-polars",
-                "timestamp": datetime.now().isoformat()
-            }
-            self.wfile.write(json.dumps(response).encode('utf-8'))
+            try:
+                db_status = "connected" if test_connection() else "disconnected"
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {
+                    "status": "healthy",
+                    "db": db_status,
+                    "version": "2.2.0-polars",
+                    "timestamp": datetime.now().isoformat()
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            except Exception as e:
+                self.send_response(503)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
@@ -34,24 +62,12 @@ def run_health_server():
     httpd = HTTPServer(server_address, HealthCheckHandler)
     httpd.serve_forever()
 
-
-# --- Health server startup ---
-# Use a simple flag to ensure this only runs once
-if "health_thread" not in st.session_state:
-    health_thread = threading.Thread(target=run_health_server, daemon=True)
-    health_thread.start()
-    st.session_state.health_thread = health_thread
-
-# --- Streamlit Page Config ---
-st.set_page_config(
-    page_title="PT Companies Dashboard",
-    page_icon="🇵🇹",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Apply global custom styles
-apply_custom_styles()
+# --- Health server startup (lazy, inside main) ---
+def start_health_server_if_needed():
+    if "health_thread" not in st.session_state:
+        health_thread = threading.Thread(target=run_health_server, daemon=True)
+        health_thread.start()
+        st.session_state.health_thread = health_thread
 
 def login_ui():
     """
@@ -66,14 +82,14 @@ def login_ui():
                 <p style="color: #8B949E;">Access the PT Companies Dashboard</p>
             </div>
         """, unsafe_allow_html=True)
-        
+
         # Get token from environment
-        admin_token = os.environ.get("ADMIN_TOKEN", "default_secret_token_123")
-        
+        admin_token = os.environ.get("ADMIN_TOKEN", "changeme")
+
         with st.form("login_form"):
             token_input = st.text_input("Access Token", type="password", placeholder="Enter your token...")
             submit = st.form_submit_button("Sign In", use_container_width=True)
-            
+
             if submit:
                 if token_input == admin_token:
                     st.session_state["authenticated"] = True
@@ -99,14 +115,14 @@ def main_dashboard():
         st.markdown("</div>", unsafe_allow_html=True)
 
     db_available = test_connection()
-    
+
     if not db_available:
         st.error("❌ Database connection failed. Please ensure PostgreSQL is running.")
         st.stop()
-        
+
     # Stats row
     stats = get_contact_coverage()
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         metric_card("Total Companies", f"{stats.get('total', 0):,}", icon="🏢")
@@ -114,16 +130,16 @@ def main_dashboard():
         phone_pct = (stats.get("with_phone", 0) / stats.get("total", 1)) * 100
         metric_card("With Phone", f"{stats.get('with_phone', 0):,}", subtitle=f"{phone_pct:.1f}% coverage", icon="📞")
     with col3:
-        email_pct = (stats.get("with_email", 0) / stats.get("total", 1)) * 100
+        email_pct = (stats.get('with_email', 0) / stats.get("total", 1)) * 100
         metric_card("With Email", f"{stats.get('with_email', 0):,}", subtitle=f"{email_pct:.1f}% coverage", icon="✉️")
     with col4:
         metric_card("Database Status", "Healthy", subtitle="PostgreSQL Online", icon="🗄️")
-        
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
     # Insights Row
     col_left, col_right = st.columns([2, 1])
-    
+
     with col_left:
         st.subheader("🏢 Market Concentration (Sectors)")
         sector_stats = get_sector_stats()
@@ -131,9 +147,9 @@ def main_dashboard():
             # Using Polars for data processing
             df_sector = pl.DataFrame(sector_stats).head(8).to_pandas()
             fig = px.bar(
-                df_sector, 
-                x="total", 
-                y="sector", 
+                df_sector,
+                x="total",
+                y="sector",
                 orientation='h',
                 color="total",
                 color_continuous_scale="Viridis",
@@ -148,13 +164,13 @@ def main_dashboard():
                 coloraxis_showscale=False
             )
             st.plotly_chart(fig, use_container_width=True)
-            
+
         st.subheader("📍 Top Regions")
         region_stats = get_region_stats()
         if region_stats:
             df_region = pl.DataFrame(region_stats).head(10).to_pandas()
             st.dataframe(
-                df_region, 
+                df_region,
                 column_config={
                     "region": "Region",
                     "total": st.column_config.NumberColumn("Total Companies", format="%d 🏢")
@@ -170,23 +186,26 @@ def main_dashboard():
             timeline_event("API Enrichment Completed", "5 hours ago", "Successfully enriched 50 companies via NIF.pt API.", icon="✅")
             timeline_event("System Health Check", "Yesterday", "PostgreSQL database optimization performed.", icon="⚙️")
             timeline_event("Keyword Search Added", "2 days ago", "Added 'RESTAURAÇÃO' to automation keywords.", icon="🔍")
-            
+
         st.subheader("🚀 Quick Actions")
         if st.button("📤 Export Full Database", use_container_width=True):
             st.toast("Exporting data...", icon="📄")
         if st.button("🧹 Clean Duplicates", use_container_width=True):
             st.toast("Cleaning data...", icon="✨")
-            
+
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("---")
-    st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.1.0-polars")
+    st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.2.0-polars")
 
 def main():
+    # Start health server in a separate thread if not already running
+    start_health_server_if_needed()
+
     # Simple Auth State
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
-        
+
     if not st.session_state["authenticated"]:
         login_ui()
     else:
@@ -198,13 +217,13 @@ def main():
                     <h3 style="margin-top: 5px;">PT Companies</h3>
                 </div>
             """, unsafe_allow_html=True)
-            
+
             st.markdown("---")
-            
+
             if st.button("🚪 Logout", use_container_width=True):
                 st.session_state["authenticated"] = False
                 st.rerun()
-                
+
             st.markdown("---")
             st.caption("Navigation through pages is handled via Streamlit's native sidebar menu.")
 
