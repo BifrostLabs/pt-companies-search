@@ -37,7 +37,18 @@ def health_check():
     }
 
 def run_health_server():
-    uvicorn.run(health_app, host="0.0.0.0", port=8001)
+    uvicorn.run(health_app, host="0.0.0.0", port=8001, log_level="error")
+
+# Start health server at module level (doesn't require session_state)
+_health_server_started = False
+import threading
+_lock = threading.Lock()
+
+with _lock:
+    if not _health_server_started:
+        thread = threading.Thread(target=run_health_server, daemon=True)
+        thread.start()
+        _health_server_started = True
 
 # --- Streamlit Page Config ---
 st.set_page_config(
@@ -180,13 +191,6 @@ def main_dashboard():
     st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.1.0-polars")
 
 def main():
-    # Start health server in a separate thread if not already running
-    # This must be run inside a function where session_state is available
-    if "health_started" not in st.session_state:
-        thread = threading.Thread(target=run_health_server, daemon=True)
-        thread.start()
-        st.session_state["health_started"] = True
-
     # Simple Auth State
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
