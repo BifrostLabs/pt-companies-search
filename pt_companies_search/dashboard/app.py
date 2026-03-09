@@ -66,16 +66,19 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         pass
 
 def run_health_server():
+    print("--- HEALTH: Starting health server on port 8001 ---", flush=True)
     server_address = ('', 8001)
     httpd = HTTPServer(server_address, HealthCheckHandler)
     httpd.serve_forever()
 
 # --- Start health server immediately at module level ---
+print("--- HEALTH: Preparing to start health server thread ---", flush=True)
 with _health_server_lock:
     if not _health_server_started:
         health_thread = threading.Thread(target=run_health_server, daemon=True)
         health_thread.start()
         _health_server_started = True
+        print("--- HEALTH: Health server thread started ---", flush=True)
 
 def login_ui():
     """
