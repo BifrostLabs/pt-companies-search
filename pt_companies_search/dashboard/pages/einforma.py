@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-eInforma.pt - Novas Empresas (Refactored UI/UX)
+eInforma.pt - Novas Empresas (Refactored UI/UX with Polars)
 """
 
 import streamlit as st
-import pandas as pd
+import polars as pl
 from datetime import datetime
 import plotly.express as px
 
@@ -48,7 +48,7 @@ def load_data():
 
 def merge_enriched_data(df, enriched_dict):
     """Merge enriched data into dataframe"""
-    if not enriched_dict or df.empty:
+    if not enriched_dict or df.is_empty():
         return df
     
     enriched_rows = []
@@ -62,8 +62,8 @@ def merge_enriched_data(df, enriched_dict):
     if not enriched_rows:
         return df
     
-    enriched_df = pd.DataFrame(enriched_rows)
-    return df.merge(enriched_df, on="nif", how="left")
+    enriched_df = pl.DataFrame(enriched_rows)
+    return df.join(enriched_df, on="nif", how="left")
 
 def render_sidebar(df, enriched_data):
     """Render sidebar filters"""
@@ -81,10 +81,15 @@ def render_sidebar(df, enriched_data):
         search = st.text_input("🔍 Search", "", placeholder="Name or NIF...").strip().lower()
         
         # Date Filter
-        if "registration_date" in df.columns and not df["registration_date"].isna().all():
-            min_date = df["registration_date"].min()
-            max_date = df["registration_date"].max()
-            date_range = st.date_input("📅 Registration Period", value=(min_date, max_date))
+        if "registration_date" in df.columns:
+            # Drop nulls for min/max calculation
+            dates = df.select("registration_date").drop_nulls()
+            if not dates.is_empty():
+                min_date = dates.min().item()
+                max_date = dates.max().item()
+                date_range = st.date_input("📅 Registration Period", value=(min_date, max_date))
+            else:
+                date_range = None
         else:
             date_range = None
         
@@ -94,13 +99,16 @@ def render_sidebar(df, enriched_data):
         # Enriched Only Toggle
         show_enriched_only = False
         if enriched_data:
-            enriched_count = len([nif for nif in df["nif"] if nif in enriched_data])
+            # Count how many NIFs in df are also in enriched_data
+            df_nifs = set(df.select("nif").to_series().to_list())
+            enriched_nifs_in_df = [nif for nif in df_nifs if nif in enriched_data]
+            enriched_count = len(enriched_nifs_in_df)
             show_enriched_only = st.checkbox(f"✨ Enriched Only ({enriched_count})", help="Show only companies with extra contact info.")
         
         st.markdown("---")
         
         # Export Option
-        csv = df.to_csv(index=False).encode("utf-8")
+        csv = df.to_pandas().to_csv(index=False).encode("utf-8")
         st.download_button(
             "📄 Export Filtered CSV",
             csv,
@@ -125,34 +133,37 @@ def render_sidebar(df, enriched_data):
 
 def apply_filters(df, filters, enriched_data):
     """Apply filters to dataframe"""
-    filtered_df = df.copy()
+    filtered_df = df
     
-    if filters["date_range"] and isinstance(filters["date_range"], tuple) and len(filters["date_range"]) == 2:
+    if filters["date_range"] and isinstance(filters["date_range"], (tuple, list)) and len(filters["date_range"]) == 2:
         start_date, end_date = filters["date_range"]
         if "registration_date" in filtered_df.columns:
-            filtered_df = filtered_df[
-                (filtered_df["registration_date"] >= pd.Timestamp(start_date)) & 
-                (filtered_df["registration_date"] <= pd.Timestamp(end_date))
-            ]
+            filtered_df = filtered_df.filter(
+                (pl.col("registration_date") >= start_date) & 
+                (pl.col("registration_date") <= end_date)
+            )
     
     if filters["search"]:
-        mask = (filtered_df["name"].str.lower().str.contains(filters["search"], na=False) |
-                filtered_df["nif"].str.lower().str.contains(filters["search"], na=False))
-        filtered_df = filtered_df[mask]
+        s = filters["search"]
+        filtered_df = filtered_df.filter(
+            (pl.col("name").str.to_lowercase().str.contains(s)) |
+            (pl.col("nif").str.to_lowercase().str.contains(s))
+        )
     
     if filters["sectors"]:
         all_keywords = []
         for sector in filters["sectors"]:
             all_keywords.extend(SECTORS.get(sector, []))
         if all_keywords:
-            mask = filtered_df["name"].str.upper().apply(
-                lambda x: any(kw in str(x).upper() for kw in all_keywords)
+            # Join keywords with | for regex
+            regex_pattern = "(?i)" + "|".join(all_keywords)
+            filtered_df = filtered_df.filter(
+                pl.col("name").str.contains(regex_pattern)
             )
-            filtered_df = filtered_df[mask]
     
     if filters["show_enriched_only"] and enriched_data:
-        enriched_nifs = set(enriched_data.keys())
-        filtered_df = filtered_df[filtered_df["nif"].isin(enriched_nifs)]
+        enriched_nifs = list(enriched_data.keys())
+        filtered_df = filtered_df.filter(pl.col("nif").is_in(enriched_nifs))
     
     return filtered_df
 
@@ -175,7 +186,7 @@ def main():
     # Load data
     df, enriched_data = load_data()
     
-    if df.empty:
+    if df.is_empty():
         st.error("Nenhum dado encontrado. Execute o scraper primeiro.")
         st.stop()
     
@@ -196,10 +207,15 @@ def main():
     with col2:
         metric_card("Filtered Results", f"{len(filtered_df):,}", icon="🔍")
     with col3:
-        enriched_count = len([nif for nif in filtered_df["nif"] if nif in enriched_data]) if enriched_data else 0
+        # Count enriched in filtered results
+        if enriched_data and not filtered_df.is_empty():
+            enriched_count = filtered_df.filter(pl.col("nif").is_in(list(enriched_data.keys()))).height
+        else:
+            enriched_count = 0
         metric_card("Enriched Data", f"{enriched_count:,}", icon="✨")
     with col4:
-        metric_card("Unique Dates", f"{df['registration_date'].nunique() if 'registration_date' in df.columns else 0}", icon="📅")
+        date_count = filtered_df.select("registration_date").n_unique() if "registration_date" in filtered_df.columns else 0
+        metric_card("Unique Dates", f"{date_count}", icon="📅")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -207,8 +223,7 @@ def main():
     st.subheader("📊 Browse Data")
     
     # Custom column configuration
-    base_cols = ["registration_date", "nif", "name"]
-    display_df = filtered_df.copy()
+    display_df = filtered_df.to_pandas()
     
     # Rename columns for display
     display_df = display_df.rename(columns={

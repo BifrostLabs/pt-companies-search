@@ -1,17 +1,21 @@
 """
-Streamlit dashboard app entry point - Refactored UI/UX
+Streamlit dashboard app entry point - Refactored UI/UX with Polars and Authentication
 """
 
+import os
 import streamlit as st
-import pandas as pd
+import polars as pl
 from datetime import datetime
 import plotly.express as px
+from fastapi import FastAPI
+import threading
+import uvicorn
 
 # Check connection and imports
 try:
     from pt_companies_search.core.database import (
         test_connection, get_contact_coverage, get_sector_stats, 
-        get_source_stats, get_region_stats
+        get_source_stats, get_region_stats, is_db_available
     )
     from pt_companies_search.dashboard.components.styles import apply_custom_styles
     from pt_companies_search.dashboard.components.cards import metric_card, timeline_event
@@ -19,6 +23,29 @@ except ImportError as e:
     st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
     st.stop()
 
+# --- Health Endpoint (FastAPI) ---
+health_app = FastAPI()
+
+@health_app.get("/health")
+def health_check():
+    db_status = "connected" if test_connection() else "disconnected"
+    return {
+        "status": "healthy",
+        "db": db_status,
+        "version": "2.1.0-polars",
+        "timestamp": datetime.now().isoformat()
+    }
+
+def run_health_server():
+    uvicorn.run(health_app, host="0.0.0.0", port=8001)
+
+# Start health server in a separate thread if not already running
+if "health_started" not in st.session_state:
+    thread = threading.Thread(target=run_health_server, daemon=True)
+    thread.start()
+    st.session_state["health_started"] = True
+
+# --- Streamlit Page Config ---
 st.set_page_config(
     page_title="PT Companies Dashboard",
     page_icon="🇵🇹",
@@ -32,8 +59,6 @@ apply_custom_styles()
 def login_ui():
     """
     Render a modern login UI for token authentication.
-    Note: Token validation logic is handled in the backend (Dwight).
-    This just renders the UI.
     """
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -45,13 +70,15 @@ def login_ui():
             </div>
         """, unsafe_allow_html=True)
         
+        # Get token from environment
+        admin_token = os.environ.get("ADMIN_TOKEN", "default_secret_token_123")
+        
         with st.form("login_form"):
-            token = st.text_input("Access Token", type="password", placeholder="Enter your token...")
+            token_input = st.text_input("Access Token", type="password", placeholder="Enter your token...")
             submit = st.form_submit_button("Sign In", use_container_width=True)
             
             if submit:
-                if token:
-                    # In a real app, this would verify with backend
+                if token_input == admin_token:
                     st.session_state["authenticated"] = True
                     st.success("Authenticated successfully!")
                     st.rerun()
@@ -104,7 +131,8 @@ def main_dashboard():
         st.subheader("🏢 Market Concentration (Sectors)")
         sector_stats = get_sector_stats()
         if sector_stats:
-            df_sector = pd.DataFrame(sector_stats).head(8)
+            # Using Polars for data processing
+            df_sector = pl.DataFrame(sector_stats).head(8).to_pandas()
             fig = px.bar(
                 df_sector, 
                 x="total", 
@@ -127,7 +155,7 @@ def main_dashboard():
         st.subheader("📍 Top Regions")
         region_stats = get_region_stats()
         if region_stats:
-            df_region = pd.DataFrame(region_stats).head(10)
+            df_region = pl.DataFrame(region_stats).head(10).to_pandas()
             st.dataframe(
                 df_region, 
                 column_config={
@@ -155,7 +183,7 @@ def main_dashboard():
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("---")
-    st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.0.0-Refactored")
+    st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.1.0-polars")
 
 def main():
     # Simple Auth State

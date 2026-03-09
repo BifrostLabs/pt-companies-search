@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-NIF.pt - Dados de Empresas (Refactored UI/UX)
+NIF.pt - Dados de Empresas (Refactored UI/UX with Polars)
 """
 
 import streamlit as st
-import pandas as pd
+import polars as pl
 from datetime import datetime
 import plotly.express as px
 
@@ -76,20 +76,20 @@ def render_sidebar():
 
 def apply_filters(df, filters):
     """Apply generic filters to dataframe"""
-    filtered_df = df.copy()
+    filtered_df = df
     if filters["search"]:
-        mask = (
-            filtered_df["name"].str.lower().str.contains(filters["search"], na=False) |
-            filtered_df["nif"].str.lower().str.contains(filters["search"], na=False)
+        s = filters["search"]
+        filtered_df = filtered_df.filter(
+            (pl.col("name").str.to_lowercase().str.contains(s)) |
+            (pl.col("nif").str.to_lowercase().str.contains(s))
         )
-        filtered_df = filtered_df[mask]
     
     if filters["phone"] and "phone" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["phone"].notna()]
+        filtered_df = filtered_df.filter(pl.col("phone").is_not_null())
     if filters["email"] and "email" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["email"].notna()]
+        filtered_df = filtered_df.filter(pl.col("email").is_not_null())
     if filters["website"] and "website" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["website"].notna()]
+        filtered_df = filtered_df.filter(pl.col("website").is_not_null())
         
     return filtered_df
 
@@ -119,7 +119,7 @@ def main():
     tab1, tab2 = st.tabs(["📦 Enriched Companies (API)", "🔍 Search Results (Scraped)"])
     
     with tab1:
-        if enriched_df.empty:
+        if enriched_df.is_empty():
             st.info("No companies enriched yet. Run the enricher script to populate this view.")
         else:
             # Apply filters
@@ -130,11 +130,13 @@ def main():
             with col1:
                 metric_card("Total Enriched", f"{len(enriched_df):,}", icon="📦")
             with col2:
-                phone_pct = (enriched_df["phone"].notna().sum() / len(enriched_df)) * 100
-                metric_card("Phone Coverage", f"{enriched_df['phone'].notna().sum():,}", subtitle=f"{phone_pct:.1f}%", icon="📞")
+                with_phone = enriched_df.filter(pl.col("phone").is_not_null()).height
+                phone_pct = (with_phone / len(enriched_df)) * 100
+                metric_card("Phone Coverage", f"{with_phone:,}", subtitle=f"{phone_pct:.1f}%", icon="📞")
             with col3:
-                email_pct = (enriched_df["email"].notna().sum() / len(enriched_df)) * 100
-                metric_card("Email Coverage", f"{enriched_df['email'].notna().sum():,}", subtitle=f"{email_pct:.1f}%", icon="✉️")
+                with_email = enriched_df.filter(pl.col("email").is_not_null()).height
+                email_pct = (with_email / len(enriched_df)) * 100
+                metric_card("Email Coverage", f"{with_email:,}", subtitle=f"{email_pct:.1f}%", icon="✉️")
             with col4:
                 metric_card("Results Found", f"{len(filtered_enriched):,}", icon="🔍")
             
@@ -142,7 +144,7 @@ def main():
             
             # Distribution Chart
             if "sector" in enriched_df.columns:
-                sector_counts = enriched_df["sector"].value_counts().reset_index().head(10)
+                sector_counts = enriched_df.select("sector").drop_nulls().group_by("sector").count().sort("count", descending=True).head(10).to_pandas()
                 sector_counts.columns = ["Sector", "Count"]
                 fig = px.pie(sector_counts, values="Count", names="Sector", hole=0.4, title="Top 10 Enriched Sectors")
                 fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color='#FAFAFA', margin=dict(l=0, r=0, t=40, b=0), height=350)
@@ -151,7 +153,7 @@ def main():
             # Dataframe view
             st.subheader("Data Explorer")
             st.dataframe(
-                filtered_enriched,
+                filtered_enriched.to_pandas(),
                 column_config={
                     "nif": "NIF",
                     "name": "Company Name",
@@ -165,7 +167,7 @@ def main():
             )
             
             # Export
-            csv = filtered_enriched.to_csv(index=False).encode("utf-8")
+            csv = filtered_enriched.to_pandas().to_csv(index=False).encode("utf-8")
             st.download_button(
                 "📄 Export Enriched Results CSV",
                 csv,
@@ -175,7 +177,7 @@ def main():
             )
             
     with tab2:
-        if search_df.empty:
+        if search_df.is_empty():
             st.info("No search results found yet. Run the searcher script to populate this view.")
         else:
             # Apply filters
@@ -188,14 +190,15 @@ def main():
             with col2:
                 metric_card("Total in Results", f"{len(filtered_search):,}", icon="📊")
             with col3:
-                metric_card("Unique Cities", f"{search_df['city'].nunique() if 'city' in search_df.columns else 0}", icon="📍")
+                city_count = search_df.select("city").n_unique() if "city" in search_df.columns else 0
+                metric_card("Unique Cities", f"{city_count}", icon="📍")
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
             # Dataframe view
             st.subheader("Data Explorer")
             st.dataframe(
-                filtered_search,
+                filtered_search.to_pandas(),
                 column_config={
                     "nif": "NIF",
                     "name": "Company Name",
@@ -207,7 +210,7 @@ def main():
             )
             
             # Export
-            csv = filtered_search.to_csv(index=False).encode("utf-8")
+            csv = filtered_search.to_pandas().to_csv(index=False).encode("utf-8")
             st.download_button(
                 "📄 Export Search Results CSV",
                 csv,

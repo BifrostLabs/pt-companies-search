@@ -13,6 +13,10 @@ dependencies = [
     "python-dotenv",
     "beautifulsoup4",
     "lxml",
+    "polars",
+    "fastapi",
+    "uvicorn",
+    "adbc-driver-postgresql",
 ]
 
 [project.scripts]

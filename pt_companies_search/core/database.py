@@ -9,7 +9,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
-import pandas as pd
+import polars as pl
 import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
 from psycopg2.pool import SimpleConnectionPool
@@ -447,9 +447,8 @@ def is_db_available() -> bool:
     return test_connection()
 
 
-def get_einforma_dataframe(use_historical: bool = False) -> pd.DataFrame:
-    """Get eInforma companies as DataFrame"""
-    import pandas as pd
+def get_einforma_dataframe(use_historical: bool = False) -> pl.DataFrame:
+    """Get eInforma companies as Polars DataFrame"""
     sql = """
     SELECT nif, name, source, source_url, registration_date, 
            phone, email, website, address, city, postal_code, region
@@ -458,17 +457,18 @@ def get_einforma_dataframe(use_historical: bool = False) -> pd.DataFrame:
     ORDER BY registration_date DESC
     """
     try:
-        with get_connection() as conn:
-            df = pd.read_sql(sql, conn)
-            return df
+        # Polars can read from SQL using a URI or connection
+        # Use simple connection URL from config
+        db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
+        df = pl.read_database(query=sql, connection=db_url)
+        return df
     except Exception as e:
         print(f"Error loading einforma data: {e}")
-        return pd.DataFrame()
+        return pl.DataFrame()
 
 
-def get_enriched_dataframe() -> pd.DataFrame:
-    """Get enriched companies as DataFrame"""
-    import pandas as pd
+def get_enriched_dataframe() -> pl.DataFrame:
+    """Get enriched companies as Polars DataFrame"""
     sql = """
     SELECT nif, name, phone, email, website, address, 
            city, postal_code, region, county, parish,
@@ -478,17 +478,16 @@ def get_enriched_dataframe() -> pd.DataFrame:
     ORDER BY enriched_at DESC
     """
     try:
-        with get_connection() as conn:
-            df = pd.read_sql(sql, conn)
-            return df
+        db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
+        df = pl.read_database(query=sql, connection=db_url)
+        return df
     except Exception as e:
         print(f"Error loading enriched data: {e}")
-        return pd.DataFrame()
+        return pl.DataFrame()
 
 
-def get_search_dataframe() -> pd.DataFrame:
-    """Get search results as DataFrame"""
-    import pandas as pd
+def get_search_dataframe() -> pl.DataFrame:
+    """Get search results as Polars DataFrame"""
     sql = """
     SELECT nif, name, source, source_url, phone, email, website, 
            address, city, postal_code, region, sector, fetched_at
@@ -497,12 +496,12 @@ def get_search_dataframe() -> pd.DataFrame:
     ORDER BY fetched_at DESC
     """
     try:
-        with get_connection() as conn:
-            df = pd.read_sql(sql, conn)
-            return df
+        db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
+        df = pl.read_database(query=sql, connection=db_url)
+        return df
     except Exception as e:
         print(f"Error loading search data: {e}")
-        return pd.DataFrame()
+        return pl.DataFrame()
 
 
 def load_enriched_data() -> Dict[str, Dict]:
