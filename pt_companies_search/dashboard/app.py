@@ -35,6 +35,10 @@ except ImportError as e:
 apply_custom_styles()
 
 # --- Health Endpoint (http.server) ---
+# Module-level flag and lock to ensure single health server instance
+_health_server_started = False
+_health_server_lock = threading.Lock()
+
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
@@ -56,18 +60,22 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+    
+    def log_message(self, format, *args):
+        # Suppress default logging to reduce noise
+        pass
 
 def run_health_server():
     server_address = ('', 8001)
     httpd = HTTPServer(server_address, HealthCheckHandler)
     httpd.serve_forever()
 
-# --- Health server startup (lazy, inside main) ---
-def start_health_server_if_needed():
-    if "health_thread" not in st.session_state:
+# --- Start health server immediately at module level ---
+with _health_server_lock:
+    if not _health_server_started:
         health_thread = threading.Thread(target=run_health_server, daemon=True)
         health_thread.start()
-        st.session_state.health_thread = health_thread
+        _health_server_started = True
 
 def login_ui():
     """
@@ -199,9 +207,6 @@ def main_dashboard():
     st.caption(f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version 2.2.0-polars")
 
 def main():
-    # Start health server in a separate thread if not already running
-    start_health_server_if_needed()
-
     # Simple Auth State
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
