@@ -24,34 +24,62 @@ st.set_page_config(
 
 # Auto-refresh every 30 seconds
 REFRESH_INTERVAL = 30
+AUTO_REFRESH_ENABLED = False
 
 # Add auto-refresh via meta tag
-st.markdown(f"""
-    <meta http-equiv="refresh" content="{REFRESH_INTERVAL}">
-    <style>
-        .refresh-indicator {{
-            position: fixed;
-            top: 60px;
-            right: 20px;
-            background: #1A1D24;
-            color: #FAFAFA;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 999;
-            border: 1px solid #333;
-        }}
-        .db-indicator {{
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }}
-        .db-online {{ background: #00C851; }}
-        .db-offline {{ background: #ff4444; }}
-    </style>
-""", unsafe_allow_html=True)
+if AUTO_REFRESH_ENABLED:
+    st.markdown(f"""
+        <meta http-equiv="refresh" content="{REFRESH_INTERVAL}">
+        <style>
+            .refresh-indicator {{
+                position: fixed;
+                top: 60px;
+                right: 20px;
+                background: #1A1D24;
+                color: #FAFAFA;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 12px;
+                z-index: 999;
+                border: 1px solid #333;
+            }}
+            .db-indicator {{
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                margin-right: 5px;
+            }}
+            .db-online {{ background: #00C851; }}
+            .db-offline {{ background: #ff4444; }}
+        </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown(f"""
+        <style>
+            .refresh-indicator {{
+                position: fixed;
+                top: 60px;
+                right: 20px;
+                background: #1A1D24;
+                color: #FAFAFA;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 12px;
+                z-index: 999;
+                border: 1px solid #333;
+            }}
+            .db-indicator {{
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                margin-right: 5px;
+            }}
+            .db-online {{ background: #00C851; }}
+            .db-offline {{ background: #ff4444; }}
+        </style>
+    """, unsafe_allow_html=True)
 
 
 def home():
@@ -60,11 +88,12 @@ def home():
     # Show refresh indicator
     db_status = "online" if is_db_available() else "offline"
     db_icon = "🗄️" if is_db_available() else "📁"
+    refresh_text = f"🔄 Auto-refresh: {REFRESH_INTERVAL}s" if AUTO_REFRESH_ENABLED else "🔄 Refresh: Off"
     st.markdown(f"""
         <div class="refresh-indicator">
             <span class="db-indicator db-{db_status}"></span>
             {db_icon} {'PostgreSQL' if is_db_available() else 'JSON Mode'} | 
-            🔄 Auto-refresh: {REFRESH_INTERVAL}s
+            {refresh_text}
         </div>
     """, unsafe_allow_html=True)
     
@@ -79,10 +108,12 @@ def home():
         # Show last update time
         st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
         
-        st.markdown("---")
+        # Add a refresh button to clear cache manually
+        if st.button("🔄 Forçar Atualização de Dados"):
+            st.cache_data.clear()
+            st.rerun()
         
-        # Clear cache to force fresh data
-        st.cache_data.clear()
+        st.markdown("---")
         
         # Statistics (auto-loads from DB or JSON)
         stats = get_stats()

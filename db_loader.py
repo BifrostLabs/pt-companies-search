@@ -87,6 +87,7 @@ def load_json_einforma() -> Dict:
 
 # ==================== UNIFIED LOADERS ====================
 
+@st.cache_data(ttl=3600)
 def get_enriched_dataframe() -> pd.DataFrame:
     """Get enriched companies as DataFrame (from DB or JSON)"""
     if DB_AVAILABLE:
@@ -134,6 +135,7 @@ def get_enriched_dataframe() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl=3600)
 def get_search_dataframe() -> pd.DataFrame:
     """Get search results as DataFrame (from DB or JSON)"""
     if DB_AVAILABLE:
@@ -187,6 +189,7 @@ def get_search_dataframe() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl=3600)
 def get_einforma_dataframe(use_historical: bool = True, year: Optional[int] = None) -> pd.DataFrame:
     """Get eInforma companies as DataFrame (from DB or JSON)"""
     if DB_AVAILABLE:
@@ -286,6 +289,7 @@ def load_enriched_data() -> Dict:
     return load_json_enriched()
 
 
+@st.cache_data(ttl=3600)
 def get_stats() -> Dict[str, int]:
     """Get dashboard statistics (from DB or JSON)"""
     stats = {
