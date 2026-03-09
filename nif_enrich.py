@@ -43,6 +43,26 @@ MAX_RETRIES = 3
 RETRY_DELAY = 60  # seconds to wait after network error
 ENRICHMENT_TIMEOUT = 30  # seconds per NIF enrichment
 
+# Sector classification
+SECTORS = {
+    "🏗️ Construção": ["CONSTRUÇÕES", "CONSTRUÇÃO", "CONSTRUCTION", "OBRAS", "REMODELAÇÕES", "CIVIL"],
+    "💻 Tecnologia/TI": ["TECH", "DIGITAL", "SOFTWARE", "INFORMÁTICA", "COMPUTER", "TECNOLOGIA", "IT ", "SISTEMAS"],
+    "🍽️ Alimentação": ["FOOD", "RESTAURANTE", "CAFÉ", "BAR ", "HOTEL", "TURISMO", "RESTAURAÇÃO", "ALIMENTAÇÃO"],
+    "🏠 Imobiliário": ["IMOBILIÁRIA", "IMÓVEIS", "PROPERTY", "REAL ESTATE", "ALOJAMENTO", "MEDIÇÃO IMOBILIÁRIA"],
+    "💼 Consultoria": ["CONSULT", "CONSULTORIA", "SERVIÇOS", "GESTÃO", "ASSESSORIA"],
+}
+
+
+def get_sector(name: str) -> str:
+    """Classify company into sector"""
+    if not name:
+        return "Outro"
+    name_upper = name.upper()
+    for sector, keywords in SECTORS.items():
+        if any(kw in name_upper for kw in keywords):
+            return sector
+    return "Outro"
+
 
 class TimeoutError(Exception):
     """Custom timeout exception"""
@@ -264,7 +284,8 @@ def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter, company_na
     
     Timeout: 30 seconds per NIF
     """
-    url = f"http://www.nif.pt/?json=1&q={nif}&key={api_key}"
+    # Use WebService endpoint for API key
+    url = f"https://www.nif.pt/api/?key={api_key}&nif={nif}"
     
     for attempt in range(MAX_RETRIES):
         try:
@@ -452,10 +473,10 @@ def save_enriched_data(data: dict):
 def save_enriched_to_db(companies: dict):
     """Save enriched companies to PostgreSQL"""
     try:
-        from db import get_connection
+        from db import transaction
         
         count = 0
-        with get_connection() as conn:
+        with transaction() as conn:
             with conn.cursor() as cur:
                 for nif, data in companies.items():
                     # Handle CAE as list or string
@@ -516,6 +537,7 @@ def save_enriched_to_db(companies: dict):
                         data.get("capital"),
                     ))
                     count += 1
+            conn.commit()
         
         if count > 0:
             print(f"🗄️  Saved {count} companies to PostgreSQL")
