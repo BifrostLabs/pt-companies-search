@@ -18,9 +18,10 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8501
+EXPOSE 8501 8001
 
+# Health check on FastAPI health endpoint (port 8001)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+    CMD curl -f http://localhost:8001/health || exit 1
 
 CMD ["streamlit", "run", "pt_companies_search/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
