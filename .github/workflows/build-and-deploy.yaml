@@ -33,6 +33,8 @@ jobs:
   # Detect changes and determine what to build
   detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       dashboard: ${{ steps.filter.outputs.dashboard }}
       scraper: ${{ steps.filter.outputs.scraper }}
@@ -115,7 +117,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/pt-companies-${{ matrix.component.name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pt-companies-${{ matrix.component.name }}
           tags: |
             type=ref,event=branch
             type=sha,prefix=
