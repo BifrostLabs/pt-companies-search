@@ -14,8 +14,6 @@ dependencies = [
     "beautifulsoup4",
     "lxml",
     "polars",
-    "fastapi",
-    "uvicorn",
     "adbc-driver-postgresql",
 ]
 

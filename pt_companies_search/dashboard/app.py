@@ -7,40 +7,33 @@ import streamlit as st
 import polars as pl
 from datetime import datetime
 import plotly.express as px
-from fastapi import FastAPI
-import threading
-import uvicorn
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
 
-# Check connection and imports
-try:
-    from pt_companies_search.core.database import (
-        test_connection, get_contact_coverage, get_sector_stats, 
-        get_source_stats, get_region_stats, is_db_available
-    )
-    from pt_companies_search.dashboard.components.styles import apply_custom_styles
-    from pt_companies_search.dashboard.components.cards import metric_card, timeline_event
-except ImportError as e:
-    st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
-    st.stop()
-
-# --- Health Endpoint (FastAPI) ---
-health_app = FastAPI()
-
-@health_app.get("/health")
-def health_check():
-    db_status = "connected" if test_connection() else "disconnected"
-    return {
-        "status": "healthy",
-        "db": db_status,
-        "version": "2.1.0-polars",
-        "timestamp": datetime.now().isoformat()
-    }
+# --- Health Endpoint (http.server) ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            db_status = "connected" if test_connection() else "disconnected"
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {
+                "status": "healthy",
+                "db": db_status,
+                "version": "2.2.0-polars",
+                "timestamp": datetime.now().isoformat()
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
 
 def run_health_server():
-    # This server will run in a background thread
-    config = uvicorn.Config(health_app, host="0.0.0.0", port=8001, log_level="info")
-    server = uvicorn.Server(config)
-    server.run()
+    server_address = ('', 8001)
+    httpd = HTTPServer(server_address, HealthCheckHandler)
+    httpd.serve_forever()
+
 
 # --- Health server startup ---
 # Use a simple flag to ensure this only runs once
