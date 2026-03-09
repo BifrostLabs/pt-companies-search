@@ -2,16 +2,41 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
-venv/
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Data
-data/*.json
+# Environment
+.env
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Streamlit
-.streamlit/
+# Project specific
+data/
+nif_config.json
+nif_rate_limits.json
+nif_timeouts.json
+*.log
 
-# OS
-.DS_Store
-Thumbs.db
+# Docker
+.dockerignore

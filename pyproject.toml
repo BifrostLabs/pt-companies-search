@@ -1,13 +1,20 @@
 [project]
-name = "pt-new-companies"
-version = "0.1.0"
-description = "Track newly registered companies in Portugal"
-requires-python = ">=3.10"
+name = "pt-companies-search"
+version = "1.0.0"
+description = "Portugal New Companies Tracker and Enricher"
+readme = "README.md"
+requires-python = ">=3.9"
 dependencies = [
-    "requests>=2.28.0",
-    "streamlit>=1.30.0",
-    "pandas>=2.0.0",
+    "requests",
+    "psycopg2-binary",
+    "streamlit",
+    "pandas",
+    "python-dotenv",
 ]
 
-[dependency-groups]
-dev = []
+[project.scripts]
+pt-search = "pt_companies_search.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
