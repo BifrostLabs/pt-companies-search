@@ -7,11 +7,6 @@ import streamlit as st
 import polars as pl
 from datetime import datetime
 import plotly.express as px
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
-import threading
-
-print("--- HEALTH: Script execution started ---", flush=True)
 
 # --- Streamlit Page Config (MUST BE FIRST) ---
 st.set_page_config(
@@ -35,52 +30,6 @@ except ImportError as e:
 
 # Apply global custom styles (AFTER page config)
 apply_custom_styles()
-
-# --- Health Endpoint (http.server) ---
-# Module-level flag and lock to ensure single health server instance
-_health_server_started = False
-_health_server_lock = threading.Lock()
-
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/health':
-            try:
-                db_status = "connected" if test_connection() else "disconnected"
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "healthy",
-                    "db": db_status,
-                    "version": "2.2.0-polars",
-                    "timestamp": datetime.now().isoformat()
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-            except Exception as e:
-                self.send_response(503)
-                self.end_headers()
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def log_message(self, format, *args):
-        # Suppress default logging to reduce noise
-        pass
-
-def run_health_server():
-    print("--- HEALTH: Starting health server on port 8001 ---", flush=True)
-    server_address = ('', 8001)
-    httpd = HTTPServer(server_address, HealthCheckHandler)
-    httpd.serve_forever()
-
-# --- Start health server immediately at module level ---
-print("--- HEALTH: Preparing to start health server thread ---", flush=True)
-with _health_server_lock:
-    if not _health_server_started:
-        health_thread = threading.Thread(target=run_health_server, daemon=True)
-        health_thread.start()
-        _health_server_started = True
-        print("--- HEALTH: Health server thread started ---", flush=True)
 
 def login_ui():
     """
