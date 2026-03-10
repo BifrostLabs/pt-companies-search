@@ -15,7 +15,7 @@ dependencies = [
         "python-dotenv",
     "beautifulsoup4",
     "lxml",
-    "polars[connectorx]",
+    "polars[all]",
     "pyarrow",
     "connectorx",
     "adbc-driver-postgresql",
