@@ -48,12 +48,19 @@
     </main>
 
     <script>
+        
+        console.log("[Frontend] Starting data fetch for /api/einforma at", new Date().toISOString());
+        console.time("Fetch /api/einforma");
         fetch('/api/einforma')
             .then(response => {
+                console.timeEnd("Fetch /api/einforma");
+                console.log("[Frontend] Backend Process Time:", response.headers.get("X-Process-Time"), "seconds");
                 if(response.status === 401) { window.location.href = '/login'; }
                 return response.json();
             })
             .then(data => {
+                console.time("Render UI");
+
                 const tbody = document.getElementById('dataTable');
                 tbody.innerHTML = '';
                 
@@ -72,6 +79,7 @@
                         `;
                     });
                 }
+            console.timeEnd("Render UI");
             })
             .catch(err => console.error('Error fetching data:', err));
     </script>

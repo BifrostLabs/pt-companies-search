@@ -17,6 +17,22 @@ except ImportError as e:
 
 app = FastAPI(title="PT Companies Dashboard")
 
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("pt-dashboard")
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    logger.info(f"PATH: {request.url.path} | TIME: {process_time:.4f}s")
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 

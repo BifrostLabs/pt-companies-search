@@ -69,12 +69,19 @@
 
             tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-500">Loading data...</td></tr>';
             
+            
+            console.log(`[Frontend] Fetching /api/nif/${type} at`, new Date().toISOString());
+            console.time(`Fetch /api/nif/${type}`);
             fetch('/api/nif/' + type)
                 .then(response => {
+                    console.timeEnd(`Fetch /api/nif/${type}`);
+                    console.log("[Frontend] Backend Process Time:", response.headers.get("X-Process-Time"), "seconds");
                     if(response.status === 401) { window.location.href = '/login'; }
                     return response.json();
                 })
                 .then(data => {
+                    console.time(`Render UI ${type}`);
+
                     tbody.innerHTML = '';
                     if(data.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No data available</td></tr>';
@@ -96,6 +103,7 @@
                             `;
                         });
                     }
+                console.timeEnd(`Render UI ${type}`);
                 })
                 .catch(err => console.error('Error fetching data:', err));
         }

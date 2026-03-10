@@ -113,12 +113,22 @@
     </main>
 
     <script>
+        
+        console.log("[Frontend] Starting data fetch for /api/data at", new Date().toISOString());
+        console.time("Fetch /api/data");
         fetch('/api/data')
             .then(response => {
+                console.timeEnd("Fetch /api/data");
+                console.log("[Frontend] Response received with status:", response.status);
+                console.log("[Frontend] Backend Process Time (from header):", response.headers.get("X-Process-Time"), "seconds");
+                console.time("Parse JSON");
                 if(response.status === 401) { window.location.href = '/login'; }
                 return response.json();
             })
             .then(data => {
+                console.timeEnd("Parse JSON");
+                console.time("Render UI");
+
                 const ctx = document.getElementById('sectorChart').getContext('2d');
                 Chart.defaults.color = '#9ca3af';
                 Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif';
@@ -167,6 +177,8 @@
                         `;
                     });
                 }
+            console.timeEnd("Render UI");
+                console.log("[Frontend] UI rendering complete at", new Date().toISOString());
             })
             .catch(err => console.error('Error fetching data:', err));
     </script>
