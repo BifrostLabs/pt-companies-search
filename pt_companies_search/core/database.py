@@ -460,7 +460,7 @@ def get_einforma_dataframe(use_historical: bool = False) -> pl.DataFrame:
         # Polars can read from SQL using a URI or connection
         # Use simple connection URL from config
         db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
-        df = pl.read_database_uri(query=sql, uri=db_url)
+        df = pl.read_database_uri(query=sql, uri=db_url, engine='adbc')
         return df
     except Exception as e:
         print(f"Error loading einforma data: {e}")
@@ -479,7 +479,7 @@ def get_enriched_dataframe() -> pl.DataFrame:
     """
     try:
         db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
-        df = pl.read_database_uri(query=sql, uri=db_url)
+        df = pl.read_database_uri(query=sql, uri=db_url, engine='adbc')
         return df
     except Exception as e:
         print(f"Error loading enriched data: {e}")
@@ -497,7 +497,7 @@ def get_search_dataframe() -> pl.DataFrame:
     """
     try:
         db_url = f"postgresql://{config.DB_CONFIG['user']}:{config.DB_CONFIG['password']}@{config.DB_CONFIG['host']}:{config.DB_CONFIG['port']}/{config.DB_CONFIG['database']}"
-        df = pl.read_database_uri(query=sql, uri=db_url)
+        df = pl.read_database_uri(query=sql, uri=db_url, engine='adbc')
         return df
     except Exception as e:
         print(f"Error loading search data: {e}")
