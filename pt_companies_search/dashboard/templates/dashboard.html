@@ -11,9 +11,11 @@
     <!-- Navbar -->
     <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <span class="text-2xl">🇵🇹</span>
-                <h1 class="text-xl font-bold tracking-wide">PT Companies Tracker</h1>
+            <div class="flex items-center space-x-6">
+                <span class="text-2xl cursor-pointer" onclick="window.location='/'">🇵🇹</span>
+                <a href="/" class="text-white font-bold hover:text-blue-400 transition-colors">Overview</a>
+                <a href="/einforma" class="text-gray-400 hover:text-white transition-colors">eInforma Data</a>
+                <a href="/nif" class="text-gray-400 hover:text-white transition-colors">NIF.pt Data</a>
             </div>
             <div>
                 <a href="/logout" class="text-sm font-medium text-red-400 hover:text-white bg-red-400/10 hover:bg-red-500 px-4 py-2 rounded-lg transition-all border border-red-400/20">Sign Out</a>
@@ -106,21 +108,17 @@
         </div>
         
         <div class="text-center text-gray-500 text-xs py-6 border-t border-gray-800">
-            <p>Built with FastAPI, Tailwind CSS, Polars, and Chart.js | Version 3.0.0</p>
+            <p>Built with FastAPI, Tailwind CSS, Polars, and Chart.js | Version 3.1.0</p>
         </div>
     </main>
 
     <script>
-        // Fetch Polars-processed JSON data securely via API
         fetch('/api/data')
             .then(response => {
-                if(response.status === 401) {
-                    window.location.href = '/login'; // Redirect if session expired
-                }
+                if(response.status === 401) { window.location.href = '/login'; }
                 return response.json();
             })
             .then(data => {
-                // Initialize Chart.js
                 const ctx = document.getElementById('sectorChart').getContext('2d');
                 Chart.defaults.color = '#9ca3af';
                 Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif';
@@ -143,31 +141,14 @@
                         indexAxis: 'y',
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                                titleFont: { size: 13 },
-                                bodyFont: { size: 14, weight: 'bold' },
-                                padding: 12,
-                                cornerRadius: 8,
-                                displayColors: false
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
-                            x: { 
-                                grid: { color: 'rgba(55, 65, 81, 0.5)', drawBorder: false }, 
-                                ticks: { font: { size: 12 } } 
-                            },
-                            y: { 
-                                grid: { display: false, drawBorder: false }, 
-                                ticks: { font: { size: 12 } } 
-                            }
+                            x: { grid: { color: 'rgba(55, 65, 81, 0.5)', drawBorder: false } },
+                            y: { grid: { display: false, drawBorder: false } }
                         }
                     }
                 });
 
-                // Populate Table
                 const tbody = document.getElementById('regionsBody');
                 tbody.innerHTML = '';
                 
@@ -175,16 +156,15 @@
                     tbody.innerHTML = '<tr><td colspan="2" class="py-4 text-center text-gray-500">No data available</td></tr>';
                 } else {
                     data.regions.forEach((r, index) => {
-                        const tr = document.createElement('tr');
-                        tr.className = 'hover:bg-gray-700/50 transition-colors';
-                        tr.innerHTML = `
-                            <td class="py-3 px-6 text-gray-300 flex items-center">
-                                <span class="text-xs bg-gray-700 text-gray-400 w-5 h-5 rounded-full flex items-center justify-center mr-3">${index + 1}</span>
-                                ${r.region || 'Unknown'}
-                            </td>
-                            <td class="py-3 px-6 text-right font-bold text-white">${r.total}</td>
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-gray-700/50 transition-colors">
+                                <td class="py-3 px-6 text-gray-300 flex items-center">
+                                    <span class="text-xs bg-gray-700 text-gray-400 w-5 h-5 rounded-full flex items-center justify-center mr-3">${index + 1}</span>
+                                    ${r.region || 'Unknown'}
+                                </td>
+                                <td class="py-3 px-6 text-right font-bold text-white">${r.total}</td>
+                            </tr>
                         `;
-                        tbody.appendChild(tr);
                     });
                 }
             })

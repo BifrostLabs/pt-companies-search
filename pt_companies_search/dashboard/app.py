@@ -9,7 +9,8 @@ from fastapi.templating import Jinja2Templates
 try:
     from pt_companies_search.core.database import (
         test_connection, get_contact_coverage, get_sector_stats,
-        get_source_stats, get_region_stats, is_db_available
+        get_source_stats, get_region_stats, is_db_available,
+        get_einforma_dataframe, get_enriched_dataframe, get_search_dataframe
     )
 except ImportError as e:
     print(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
@@ -34,7 +35,7 @@ def health_check():
     return {
         "status": "healthy",
         "db": db_status,
-        "version": "3.0.0-fastapi-tailwind",
+        "version": "3.1.0-fastapi-tailwind",
         "timestamp": datetime.now().isoformat()
     }
 
@@ -58,6 +59,8 @@ def logout():
     response.delete_cookie(AUTH_COOKIE_NAME)
     return response
 
+# --- Protected HTML Pages ---
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     if not check_auth(request):
@@ -69,8 +72,23 @@ def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request, 
         "db_available": db_available,
-        "stats": stats
+        "stats": stats,
+        "active_page": "dashboard"
     })
+
+@app.get("/einforma", response_class=HTMLResponse)
+def einforma_page(request: Request):
+    if not check_auth(request):
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse("einforma.html", {"request": request, "active_page": "einforma"})
+
+@app.get("/nif", response_class=HTMLResponse)
+def nif_page(request: Request):
+    if not check_auth(request):
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse("nif.html", {"request": request, "active_page": "nif"})
+
+# --- Protected Data APIs ---
 
 @app.get("/api/data")
 def get_dashboard_data(request: Request):
@@ -80,21 +98,41 @@ def get_dashboard_data(request: Request):
     sectors = get_sector_stats()
     regions = get_region_stats()
     
-    # Use Polars for efficient data transformation
-    if sectors:
-        df_sector = pl.DataFrame(sectors).head(8).to_dicts()
-    else:
-        df_sector = []
+    df_sector = pl.DataFrame(sectors).head(8).to_dicts() if sectors else []
+    df_region = pl.DataFrame(regions).head(10).to_dicts() if regions else []
         
-    if regions:
-        df_region = pl.DataFrame(regions).head(10).to_dicts()
-    else:
-        df_region = []
-        
-    return {
-        "sectors": df_sector,
-        "regions": df_region
-    }
+    return {"sectors": df_sector, "regions": df_region}
+
+@app.get("/api/einforma")
+def get_einforma_data(request: Request):
+    if not check_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        df = get_einforma_dataframe()
+        # Ensure dates are serialized properly; fill nulls
+        return df.fill_null("").to_dicts()
+    except Exception as e:
+        return []
+
+@app.get("/api/nif/enriched")
+def get_nif_enriched_data(request: Request):
+    if not check_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        df = get_enriched_dataframe()
+        return df.fill_null("").to_dicts()
+    except Exception as e:
+        return []
+
+@app.get("/api/nif/searched")
+def get_nif_searched_data(request: Request):
+    if not check_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        df = get_search_dataframe()
+        return df.fill_null("").to_dicts()
+    except Exception as e:
+        return []
 
 if __name__ == "__main__":
     import uvicorn

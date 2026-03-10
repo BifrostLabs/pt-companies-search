@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIF Data - PT Companies</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <span class="text-2xl cursor-pointer" onclick="window.location='/'">🇵🇹</span>
+                <a href="/" class="text-gray-400 hover:text-white transition-colors">Overview</a>
+                <a href="/einforma" class="text-gray-400 hover:text-white transition-colors">eInforma Data</a>
+                <a href="/nif" class="text-white font-bold hover:text-blue-400 transition-colors">NIF.pt Data</a>
+            </div>
+            <div>
+                <a href="/logout" class="text-sm font-medium text-red-400 hover:text-white bg-red-400/10 hover:bg-red-500 px-4 py-2 rounded-lg transition-all border border-red-400/20">Sign Out</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="p-6 max-w-7xl mx-auto mt-6">
+        <div class="flex justify-between items-end mb-8 border-b border-gray-700 pb-4">
+            <div>
+                <h2 class="text-3xl font-bold text-white mb-2">NIF Database</h2>
+                <p class="text-gray-400">Enriched contact and sector data from NIF.pt.</p>
+            </div>
+            <div class="flex space-x-2 bg-gray-800 p-1 rounded-lg border border-gray-700">
+                <button id="btnEnriched" onclick="loadData('enriched')" class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white transition-all shadow">Enriched Data</button>
+                <button id="btnSearched" onclick="loadData('searched')" class="px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-all">Searched Data</button>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden flex flex-col h-[70vh]">
+            <div class="overflow-y-auto flex-1 p-0">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-900/80 text-xs uppercase tracking-wider text-gray-400 sticky top-0 backdrop-blur-sm" id="tableHeader">
+                        <tr>
+                            <th class="py-4 px-6 font-semibold">NIF</th>
+                            <th class="py-4 px-6 font-semibold">Name</th>
+                            <th class="py-4 px-6 font-semibold">Contact</th>
+                            <th class="py-4 px-6 font-semibold">Sector</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700 text-sm" id="dataTable">
+                        <tr><td colspan="4" class="py-8 text-center text-gray-500">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function loadData(type) {
+            const btnEnriched = document.getElementById('btnEnriched');
+            const btnSearched = document.getElementById('btnSearched');
+            const tbody = document.getElementById('dataTable');
+            
+            // UI Toggle
+            if(type === 'enriched') {
+                btnEnriched.className = "px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white transition-all shadow";
+                btnSearched.className = "px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-all";
+            } else {
+                btnSearched.className = "px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white transition-all shadow";
+                btnEnriched.className = "px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-all";
+            }
+
+            tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-500">Loading data...</td></tr>';
+            
+            fetch('/api/nif/' + type)
+                .then(response => {
+                    if(response.status === 401) { window.location.href = '/login'; }
+                    return response.json();
+                })
+                .then(data => {
+                    tbody.innerHTML = '';
+                    if(data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No data available</td></tr>';
+                    } else {
+                        const displayData = data.slice(0, 200);
+                        displayData.forEach(r => {
+                            let contactHtml = '';
+                            if (r.phone && r.phone !== '') contactHtml += `📞 ${r.phone}<br>`;
+                            if (r.email && r.email !== '') contactHtml += `✉️ ${r.email}`;
+                            if (contactHtml === '') contactHtml = '-';
+                            
+                            tbody.innerHTML += `
+                                <tr class="hover:bg-gray-700/50 transition-colors">
+                                    <td class="py-3 px-6 text-blue-400 font-mono">${r.nif || ''}</td>
+                                    <td class="py-3 px-6 text-white font-medium">${r.name || ''}</td>
+                                    <td class="py-3 px-6 text-gray-400 text-xs">${contactHtml}</td>
+                                    <td class="py-3 px-6 text-gray-500 text-xs">${r.activity_desc || r.sector || ''}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                })
+                .catch(err => console.error('Error fetching data:', err));
+        }
+
+        // Initial Load
+        loadData('enriched');
+    </script>
+</body>
+</html>
