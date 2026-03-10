@@ -16,6 +16,7 @@ dependencies = [
     "beautifulsoup4",
     "lxml",
     "polars",
+    "connectorx",
     "adbc-driver-postgresql",
 ]
 
