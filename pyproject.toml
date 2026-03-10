@@ -12,15 +12,13 @@ dependencies = [
     "jinja2",
     "python-multipart",
     "pandas",
-        "python-dotenv",
+    "python-dotenv",
     "beautifulsoup4",
     "lxml",
     "polars",
     "adbc-driver-postgresql",
-    "pyarrow",,
     "pyarrow",
-    "connectorx",
-    "adbc-driver-postgresql",
+    "connectorx"
 ]
 
 [project.scripts]
