@@ -55,12 +55,14 @@ jobs:
               - 'db_loader.py'
               - 'db.py'
               - 'requirements.txt'
+              - 'pyproject.toml'
               - 'docker/Dockerfile.dashboard'
             scraper:
               - 'scraper.py'
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'pyproject.toml'
               - 'docker/Dockerfile.scraper'
             enricher:
               - 'nif_enrich.py'
@@ -68,16 +70,19 @@ jobs:
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'pyproject.toml'
               - 'docker/Dockerfile.enricher'
             searcher:
               - 'nif_search.py'
               - 'db.py'
               - 'db_loader.py'
               - 'requirements.txt'
+              - 'pyproject.toml'
               - 'docker/Dockerfile.searcher'
             any-python:
               - '**.py'
               - 'requirements.txt'
+              - 'pyproject.toml'
               - 'docker/**'
 
   # Build Docker images
