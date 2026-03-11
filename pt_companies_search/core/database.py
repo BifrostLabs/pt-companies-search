@@ -239,12 +239,14 @@ def get_company_by_nif(nif: str) -> Optional[Dict[str, Any]]:
 def search_companies(
     query: Optional[str] = None,
     sector: Optional[str] = None,
+    exclude_outro: bool = False,
     region: Optional[str] = None,
     city: Optional[str] = None,
     source: Optional[str] = None,
     has_phone: bool = False,
     has_email: bool = False,
     has_website: bool = False,
+    is_enriched: Optional[bool] = None,
     limit: int = 100,
     offset: int = 0
 ) -> List[Dict[str, Any]]:
@@ -259,6 +261,9 @@ def search_companies(
     if sector:
         conditions.append("sector = %s")
         params.append(sector)
+    
+    if exclude_outro:
+        conditions.append("sector != 'Outro'")
     
     if region:
         conditions.append("region = %s")
@@ -317,6 +322,9 @@ def count_companies(
     if sector:
         conditions.append("sector = %s")
         params.append(sector)
+    
+    if exclude_outro:
+        conditions.append("sector != 'Outro'")
     
     if region:
         conditions.append("region = %s")

@@ -30,6 +30,7 @@ def run_scraper(args):
             c['source'] = 'einforma'
             c['source_url'] = c.get('url')
             c['registration_date'] = c.get('date')
+            c['sector'] = get_sector(c.get('name', ''))
             upsert_company(c)
     print("✅ Done.")
 
@@ -60,8 +61,13 @@ def run_enrich(args):
     
     from pt_companies_search.core.database import search_companies
     
-    # Get companies that haven't been enriched yet
-    companies = search_companies(source=args.source, limit=args.limit)
+    # Get companies that haven't been enriched yet, optionally filtering by dashboard sectors
+    companies = search_companies(
+        source=args.source, 
+        limit=args.limit,
+        is_enriched=False,
+        exclude_outro=args.dashboard_only
+    )
     if not companies:
         print("✅ No companies to enrich.")
         return
@@ -100,6 +106,8 @@ def main():
     enrich_parser = subparsers.add_parser("enrich", help="Enrich data using NIF.pt API")
     enrich_parser.add_argument("--source", default=None)
     enrich_parser.add_argument("--limit", type=int, default=50)
+    enrich_parser.add_argument("--dashboard-only", action="store_true", default=True, help="Only enrich companies that match a dashboard sector")
+    enrich_parser.add_argument("--all-sectors", action="store_false", dest="dashboard_only", help="Enrich all companies regardless of sector")
     
     args = parser.parse_args()
     

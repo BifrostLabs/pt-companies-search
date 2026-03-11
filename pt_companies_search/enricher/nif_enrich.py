@@ -171,3 +171,33 @@ def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter) -> Optiona
             else:
                 return None
     return None
+
+def wait_for_available_slot(rate_limiter: RateLimiter, verbose: bool = True) -> bool:
+    """
+    Wait until we can make a request without exceeding rate limits
+    
+    Returns: True if can proceed, False if limits exhausted
+    """
+    can_proceed, reason, wait_seconds = rate_limiter.can_make_request()
+    
+    if can_proceed:
+        return True
+    
+    usage = rate_limiter.get_usage()
+    if usage["month"]["remaining"] == 0:
+        if verbose:
+            print(f"\n❌ Monthly limit exhausted ({usage['month']['used']}/{usage['month']['limit']})")
+        return False
+        
+    if usage["day"]["remaining"] == 0:
+        if verbose:
+            print(f"\n⚠️ Daily limit reached. Need to wait until tomorrow.")
+        return False
+        
+    if wait_seconds > 0:
+        if verbose:
+            print(f"\n⏳ Waiting {wait_seconds:.1f}s for rate limit ({reason})...")
+        time.sleep(wait_seconds)
+        return True
+        
+    return False
