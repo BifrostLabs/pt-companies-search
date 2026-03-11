@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 COPY README.md .
+COPY dashboard.py .
 COPY pt_companies_search/ ./pt_companies_search/
 
 RUN pip install --no-cache-dir .
@@ -18,10 +19,10 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8501 8001
+EXPOSE 8501
 
-# Health check on FastAPI health endpoint (port 8001)
+# Health check on Streamlit port
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-CMD ["uvicorn", "pt_companies_search.dashboard.app:app", "--host", "0.0.0.0", "--port", "8501", "--proxy-headers", "--workers", "4"]
+CMD ["streamlit", "run", "dashboard.py", "--server.address", "0.0.0.0", "--server.port", "8501", "--server.headless", "true"]
