@@ -140,15 +140,22 @@ def main():
             
             # Dataframe view
             section_header("Data Explorer", icon="📦")
+            
+            # Prepare data for display
+            display_enriched = filtered_enriched.to_pandas()
+            if "nif" in display_enriched.columns:
+                display_enriched["nif_link"] = display_enriched["nif"].apply(lambda x: f"https://www.nif.pt/{x}/")
+
             st.dataframe(
-                filtered_enriched.to_pandas(),
+                display_enriched,
                 column_config={
-                    "nif": "NIF",
+                    "nif_link": st.column_config.LinkColumn("NIF", display_text=r"https://www.nif.pt/(.+)/"),
                     "name": "Company Name",
                     "email": st.column_config.LinkColumn("Email"),
                     "website": st.column_config.LinkColumn("Website"),
                     "enriched_at": st.column_config.DatetimeColumn("Enriched At", format="DD/MM/YYYY HH:mm"),
                 },
+                column_order=["nif_link", "name", "email", "website", "city", "enriched_at"],
                 hide_index=True,
                 use_container_width=True,
                 height=500
@@ -185,13 +192,20 @@ def main():
             
             # Dataframe view
             section_header("Search Explorer", icon="🔍")
+            
+            # Prepare data for display
+            display_search = filtered_search.to_pandas()
+            if "nif" in display_search.columns:
+                display_search["nif_link"] = display_search["nif"].apply(lambda x: f"https://www.nif.pt/{x}/")
+
             st.dataframe(
-                filtered_search.to_pandas(),
+                display_search,
                 column_config={
-                    "nif": "NIF",
+                    "nif_link": st.column_config.LinkColumn("NIF", display_text=r"https://www.nif.pt/(.+)/"),
                     "name": "Company Name",
                     "fetched_at": st.column_config.DatetimeColumn("Discovered At", format="DD/MM/YYYY HH:mm"),
                 },
+                column_order=["nif_link", "name", "city", "fetched_at"],
                 hide_index=True,
                 use_container_width=True,
                 height=500

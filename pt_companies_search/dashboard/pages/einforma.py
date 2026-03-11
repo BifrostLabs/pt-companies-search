@@ -216,6 +216,10 @@ def main():
     # Custom column configuration
     display_df = filtered_df.to_pandas()
     
+    # Create NIF link
+    if "nif" in display_df.columns:
+        display_df["nif_link"] = display_df["nif"].apply(lambda x: f"https://www.nif.pt/{x}/")
+
     # Rename columns for display
     display_df = display_df.rename(columns={
         "registration_date": "Date",
@@ -227,7 +231,7 @@ def main():
     })
     
     column_config = {
-        "NIF": st.column_config.TextColumn("NIF", width="small"),
+        "nif_link": st.column_config.LinkColumn("NIF", display_text=r"https://www.nif.pt/(.+)/", width="small"),
         "Company Name": st.column_config.TextColumn("Company Name", width="large"),
         "Date": st.column_config.DateColumn("Date", format="DD/MM/YYYY"),
         "Email": st.column_config.LinkColumn("Email", width="medium"),
@@ -240,9 +244,9 @@ def main():
         display_df["✨"] = display_df["NIF"].apply(lambda x: "✅" if x in enriched_data else "")
         column_config["✨"] = st.column_config.TextColumn("✨", width="extra-small")
         # Reorder to put status first
-        cols = ["✨", "Date", "NIF", "Company Name"]
+        cols = ["✨", "Date", "nif_link", "Company Name"]
     else:
-        cols = ["Date", "NIF", "Company Name"]
+        cols = ["Date", "nif_link", "Company Name"]
         
     # Add enriched cols if available
     for c in ["Phone", "Email", "City"]:
