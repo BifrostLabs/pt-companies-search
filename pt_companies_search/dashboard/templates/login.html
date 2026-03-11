@@ -3,35 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - PT Companies</title>
+    <title>Login | PT Companies Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-gradient {
+            background-size: 200% 200%;
+            animation: gradient 15s ease infinite;
+        }
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white h-screen flex items-center justify-center font-sans">
-    <div class="bg-gray-800 p-10 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
-        <div class="text-center mb-8">
-            <h1 class="text-6xl mb-4">🇵🇹</h1>
-            <h2 class="text-2xl font-extrabold text-gray-100">Welcome Back</h2>
-            <p class="text-gray-400 mt-2 text-sm">Access the PT Companies Dashboard</p>
+<body class="bg-gray-950 text-white h-screen flex items-center justify-center font-sans overflow-hidden">
+    <!-- Animated Background -->
+    <div class="absolute inset-0 z-0 opacity-30 animate-gradient bg-gradient-to-br from-blue-900 via-gray-900 to-purple-900"></div>
+    <div class="absolute inset-0 z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+    
+    <!-- Login Card -->
+    <div class="glass p-10 rounded-2xl shadow-2xl w-full max-w-md z-10 transform transition-all hover:scale-[1.01]">
+        <div class="text-center mb-10">
+            <div class="inline-block p-4 rounded-full bg-blue-600/20 mb-4 border border-blue-500/30">
+                <span class="text-5xl">🇵🇹</span>
+            </div>
+            <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                Data Terminal
+            </h2>
+            <p class="text-gray-400 mt-2 text-sm font-medium tracking-wide uppercase">Portugal New Companies</p>
         </div>
         
         {% if error %}
-        <div class="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded mb-6 text-center text-sm">
+        <div class="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl mb-6 text-center text-sm font-semibold animate-pulse">
             {{ error }}
         </div>
         {% endif %}
         
-        <form action="/login" method="POST" class="space-y-6">
-            <div>
-                <label for="token" class="block text-sm font-medium text-gray-400 mb-2">Access Token</label>
-                <input type="password" id="token" name="token" placeholder="Enter your token..." required 
-                       class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white placeholder-gray-500">
+        <form action="/login" method="POST" class="space-y-8">
+            <div class="relative group">
+                <label for="token" class="block text-xs font-bold text-blue-400 mb-2 uppercase tracking-widest ml-1">Secure Access Token</label>
+                <input type="password" id="token" name="token" placeholder="••••••••••••" required 
+                       class="w-full px-5 py-4 bg-gray-900/50 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 transition-all text-white placeholder-gray-600 outline-none">
+                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-blue-400 transition-colors pt-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
             </div>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200">
-                Sign In
+            
+            <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-900/20 transform transition-all active:scale-95 flex items-center justify-center space-x-2">
+                <span>Authorize Access</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
             </button>
         </form>
-        <div class="mt-8 text-center">
-            <p class="text-xs text-gray-500">Secured with FastAPI & JWT Cookies</p>
+        
+        <div class="mt-10 text-center flex flex-col items-center">
+            <div class="h-px w-20 bg-gray-800 mb-4"></div>
+            <p class="text-[10px] text-gray-500 font-mono uppercase tracking-[0.2em]">Restricted Access Area</p>
         </div>
     </div>
 </body>
