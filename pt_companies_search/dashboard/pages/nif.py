@@ -13,8 +13,8 @@ try:
     from pt_companies_search.core.database import (
         is_db_available, get_enriched_dataframe, get_search_dataframe, get_stats
     )
-    from pt_companies_search.dashboard.components.styles import apply_custom_styles
-    from pt_companies_search.dashboard.components.cards import metric_card
+    from pt_companies_search.dashboard.components.styles import apply_custom_styles, render_header, render_footer
+    from pt_companies_search.dashboard.components.cards import metric_card, section_header
 except ImportError as e:
     st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
     st.stop()
@@ -42,15 +42,14 @@ def render_sidebar():
     """Render sidebar navigation/filters"""
     with st.sidebar:
         st.markdown("""
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h1 style="font-size: 32px; margin-bottom: 0;">📊</h1>
-                <h3 style="margin-top: 5px;">NIF.pt</h3>
+            <div style="text-align: center; margin-bottom: 25px; background: #1A1D24; padding: 20px; border-radius: 12px; border: 1px solid #30363D;">
+                <h1 style="font-size: 40px; margin-bottom: 0;">📊</h1>
+                <h3 style="margin-top: 10px; font-weight: 700;">NIF.pt</h3>
+                <p style="color: #8B949E; font-size: 0.8rem;">Enrichment Explorer</p>
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("---")
-        
-        st.markdown("**🔍 Filters**")
+        st.markdown("### 🔍 Filters")
         search_query = st.text_input("Name/NIF Search", "", placeholder="Search...").lower()
         
         has_phone = st.checkbox("📞 With phone number")
@@ -59,6 +58,7 @@ def render_sidebar():
         
         st.markdown("---")
         
+        st.markdown("### ⚡ Actions")
         if st.button("🔄 Refresh Data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
@@ -95,19 +95,7 @@ def apply_filters(df, filters):
 
 def main():
     # Header area
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        st.title("📊 NIF.pt - Dados de Empresas")
-        st.markdown("<p style='color: #8B949E; margin-top: -10px;'>Companies enriched via API and discovered through search.</p>", unsafe_allow_html=True)
-    with col_h2:
-        db_icon = "🗄️" if is_db_available() else "📁"
-        st.markdown(f"""
-            <div style="text-align: right; margin-top: 15px;">
-                <span class="status-pill {'status-online' if is_db_available() else 'status-offline'}">
-                    {db_icon} {'PostgreSQL Connected' if is_db_available() else 'Offline Mode'}
-                </span>
-            </div>
-        """, unsafe_allow_html=True)
+    render_header("NIF.pt - Dados de Empresas", "Companies enriched via API and discovered through search.")
 
     # Load data
     enriched_df, search_df, stats = load_data()
@@ -131,11 +119,11 @@ def main():
                 metric_card("Total Enriched", f"{len(enriched_df):,}", icon="📦")
             with col2:
                 with_phone = enriched_df.filter(pl.col("phone").is_not_null()).height
-                phone_pct = (with_phone / len(enriched_df)) * 100
+                phone_pct = (with_phone / len(enriched_df)) * 100 if not enriched_df.is_empty() else 0
                 metric_card("Phone Coverage", f"{with_phone:,}", subtitle=f"{phone_pct:.1f}%", icon="📞")
             with col3:
                 with_email = enriched_df.filter(pl.col("email").is_not_null()).height
-                email_pct = (with_email / len(enriched_df)) * 100
+                email_pct = (with_email / len(enriched_df)) * 100 if not enriched_df.is_empty() else 0
                 metric_card("Email Coverage", f"{with_email:,}", subtitle=f"{email_pct:.1f}%", icon="✉️")
             with col4:
                 metric_card("Results Found", f"{len(filtered_enriched):,}", icon="🔍")
@@ -151,7 +139,7 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
             
             # Dataframe view
-            st.subheader("Data Explorer")
+            section_header("Data Explorer", icon="📦")
             st.dataframe(
                 filtered_enriched.to_pandas(),
                 column_config={
@@ -196,7 +184,7 @@ def main():
             st.markdown("<br>", unsafe_allow_html=True)
             
             # Dataframe view
-            st.subheader("Data Explorer")
+            section_header("Search Explorer", icon="🔍")
             st.dataframe(
                 filtered_search.to_pandas(),
                 column_config={
@@ -218,6 +206,8 @@ def main():
                 "text/csv",
                 use_container_width=True
             )
+
+    render_footer()
 
 if __name__ == "__main__":
     main()

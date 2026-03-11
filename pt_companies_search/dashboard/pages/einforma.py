@@ -13,8 +13,8 @@ try:
     from pt_companies_search.core.database import (
         is_db_available, get_einforma_dataframe, load_enriched_data
     )
-    from pt_companies_search.dashboard.components.styles import apply_custom_styles
-    from pt_companies_search.dashboard.components.cards import metric_card
+    from pt_companies_search.dashboard.components.styles import apply_custom_styles, render_header, render_footer
+    from pt_companies_search.dashboard.components.cards import metric_card, section_header
 except ImportError as e:
     st.error(f"Import Error: {e}. Check directory structure and PYTHONPATH.")
     st.stop()
@@ -69,16 +69,17 @@ def render_sidebar(df, enriched_data):
     """Render sidebar filters"""
     with st.sidebar:
         st.markdown("""
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h1 style="font-size: 32px; margin-bottom: 0;">📋</h1>
-                <h3 style="margin-top: 5px;">eInforma.pt</h3>
+            <div style="text-align: center; margin-bottom: 25px; background: #1A1D24; padding: 20px; border-radius: 12px; border: 1px solid #30363D;">
+                <h1 style="font-size: 40px; margin-bottom: 0;">📋</h1>
+                <h3 style="margin-top: 10px; font-weight: 700;">eInforma.pt</h3>
+                <p style="color: #8B949E; font-size: 0.8rem;">Data Source Explorer</p>
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("---")
+        st.markdown("### 🔍 Filters")
         
         # Search Filter
-        search = st.text_input("🔍 Search", "", placeholder="Name or NIF...").strip().lower()
+        search = st.text_input("Search Company", "", placeholder="Name or NIF...").strip().lower()
         
         # Date Filter
         if "registration_date" in df.columns:
@@ -87,14 +88,14 @@ def render_sidebar(df, enriched_data):
             if not dates.is_empty():
                 min_date = dates.min().item()
                 max_date = dates.max().item()
-                date_range = st.date_input("📅 Registration Period", value=(min_date, max_date))
+                date_range = st.date_input("Registration Period", value=(min_date, max_date))
             else:
                 date_range = None
         else:
             date_range = None
         
         # Sector Filter
-        selected_sectors = st.multiselect("🏢 Filter by Sector", list(SECTORS.keys()), placeholder="All Sectors")
+        selected_sectors = st.multiselect("Filter by Sector", list(SECTORS.keys()), placeholder="All Sectors")
         
         # Enriched Only Toggle
         show_enriched_only = False
@@ -107,6 +108,12 @@ def render_sidebar(df, enriched_data):
         
         st.markdown("---")
         
+        # Actions
+        st.markdown("### ⚡ Actions")
+        if st.button("🔄 Refresh Cache", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+            
         # Export Option
         csv = df.to_pandas().to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -117,10 +124,6 @@ def render_sidebar(df, enriched_data):
             use_container_width=True
         )
         
-        if st.button("🔄 Refresh Cache", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-            
         st.markdown("---")
         st.caption(f"Last heartbeat: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -169,19 +172,7 @@ def apply_filters(df, filters, enriched_data):
 
 def main():
     # Header area
-    col_h1, col_h2 = st.columns([3, 1])
-    with col_h1:
-        st.title("📋 eInforma.pt - Novas Empresas")
-        st.markdown("<p style='color: #8B949E; margin-top: -10px;'>Detailed view of newly registered companies in Portugal.</p>", unsafe_allow_html=True)
-    with col_h2:
-        db_icon = "🗄️" if is_db_available() else "📁"
-        st.markdown(f"""
-            <div style="text-align: right; margin-top: 15px;">
-                <span class="status-pill {'status-online' if is_db_available() else 'status-offline'}">
-                    {db_icon} {'PostgreSQL Connected' if is_db_available() else 'Offline Mode'}
-                </span>
-            </div>
-        """, unsafe_allow_html=True)
+    render_header("eInforma.pt - Novas Empresas", "Detailed view of newly registered companies in Portugal.")
 
     # Load data
     df, enriched_data = load_data()
@@ -220,7 +211,7 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
     
     # Improved Data Table
-    st.subheader("📊 Browse Data")
+    section_header("Browse Data", icon="📊")
     
     # Custom column configuration
     display_df = filtered_df.to_pandas()
@@ -266,8 +257,7 @@ def main():
         hide_index=True
     )
     
-    # Small summary
-    st.caption(f"Showing {len(filtered_df)} of {len(df)} companies.")
+    render_footer()
 
 if __name__ == "__main__":
     main()
