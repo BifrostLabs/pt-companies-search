@@ -142,28 +142,35 @@ def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter) -> Optiona
             if not record:
                 return None
             
+            # API can return nested place or top-level fields
+            place = record.get("place", {})
+            contacts = record.get("contacts", {})
+            geo = record.get("geo", {})
+            structure = record.get("structure", {})
+
             enriched = {
-                "nif": nif,
-                "title": record.get("title"),
-                "address": record.get("place", {}).get("address"),
-                "city": record.get("place", {}).get("city"),
-                "postal_code": f"{record.get('place', {}).get('pc4', '')}-{record.get('place', {}).get('pc3', '')}".rstrip("-"),
-                "phone": record.get("contacts", {}).get("phone"),
-                "email": record.get("contacts", {}).get("email"),
-                "website": record.get("contacts", {}).get("website"),
-                "fax": record.get("contacts", {}).get("fax"),
+                "nif": str(nif),
+                "title": record.get("title") or record.get("alias"),
+                "address": place.get("address") or record.get("address"),
+                "city": place.get("city") or record.get("city"),
+                "postal_code": f"{place.get('pc4') or record.get('pc4', '')}-{place.get('pc3') or record.get('pc3', '')}".strip("-"),
+                "phone": contacts.get("phone"),
+                "email": contacts.get("email"),
+                "website": contacts.get("website"),
+                "fax": contacts.get("fax"),
                 "cae": record.get("cae"),
                 "activity": record.get("activity"),
                 "status": record.get("status"),
-                "nature": record.get("structure", {}).get("nature"),
-                "capital": record.get("structure", {}).get("capital"),
-                "region": record.get("geo", {}).get("region"),
-                "county": record.get("geo", {}).get("county"),
-                "parish": record.get("geo", {}).get("parish"),
+                "nature": structure.get("nature"),
+                "capital": structure.get("capital"),
+                "region": geo.get("region"),
+                "county": geo.get("county"),
+                "parish": geo.get("parish"),
                 "enriched_at": datetime.now().isoformat(),
                 "enriched_source": "nif.pt"
             }
-            return {k: v for k, v in enriched.items() if v is not None}
+            # Clean None or empty strings
+            return {k: v for k, v in enriched.items() if v not in [None, "", "-"]}
             
         except (requests.RequestException, json.JSONDecodeError):
             if attempt < MAX_RETRIES - 1:
