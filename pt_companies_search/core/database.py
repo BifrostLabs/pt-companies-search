@@ -286,6 +286,11 @@ def search_companies(
     if has_website:
         conditions.append("website IS NOT NULL")
     
+    if is_enriched is True:
+        conditions.append("enriched_at IS NOT NULL")
+    elif is_enriched is False:
+        conditions.append("enriched_at IS NULL")
+    
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     
     sql = f"""
