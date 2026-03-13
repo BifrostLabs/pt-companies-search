@@ -150,6 +150,60 @@ def get_nif_searched_data(request: Request):
     except Exception as e:
         return []
 
+@app.get("/api/nif/coverage")
+def get_nif_coverage_stats(request: Request):
+    """Get phone, email, website coverage statistics"""
+    if not check_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        with get_cursor() as cur:
+            # Get coverage for enriched companies
+            cur.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE phone IS NOT NULL) as with_phone,
+                    COUNT(*) FILTER (WHERE email IS NOT NULL) as with_email,
+                    COUNT(*) FILTER (WHERE website IS NOT NULL) as with_website,
+                    COUNT(*) FILTER (WHERE phone IS NOT NULL OR email IS NOT NULL OR website IS NOT NULL) as with_any_contact
+                FROM companies 
+                WHERE source = 'nif_api' AND enriched_at IS NOT NULL
+            """)
+            enriched = dict(cur.fetchone())
+            
+            # Get coverage for searched companies
+            cur.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE phone IS NOT NULL) as with_phone,
+                    COUNT(*) FILTER (WHERE email IS NOT NULL) as with_email,
+                    COUNT(*) FILTER (WHERE website IS NOT NULL) as with_website,
+                    COUNT(*) FILTER (WHERE phone IS NOT NULL OR email IS NOT NULL OR website IS NOT NULL) as with_any_contact
+                FROM companies 
+                WHERE source = 'nif_search'
+            """)
+            searched = dict(cur.fetchone())
+            
+            # Calculate percentages
+            def calc_pct(stats):
+                total = stats['total'] or 0
+                if total == 0:
+                    return {**stats, 'phone_pct': 0, 'email_pct': 0, 'website_pct': 0, 'contact_pct': 0}
+                return {
+                    **stats,
+                    'phone_pct': round((stats['with_phone'] or 0) / total * 100, 1),
+                    'email_pct': round((stats['with_email'] or 0) / total * 100, 1),
+                    'website_pct': round((stats['with_website'] or 0) / total * 100, 1),
+                    'contact_pct': round((stats['with_any_contact'] or 0) / total * 100, 1)
+                }
+            
+            return {
+                'enriched': calc_pct(enriched),
+                'searched': calc_pct(searched)
+            }
+    except Exception as e:
+        print(f"Error getting coverage stats: {e}")
+        return {'enriched': {}, 'searched': {}}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8501)

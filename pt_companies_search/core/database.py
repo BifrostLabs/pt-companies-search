@@ -483,9 +483,10 @@ def get_einforma_dataframe(use_historical: bool = False) -> pl.DataFrame:
 def get_enriched_dataframe() -> pl.DataFrame:
     """Get enriched companies as Polars DataFrame"""
     sql = """
-    SELECT nif, name, phone, email, website, address, 
+    SELECT nif, name, phone, email, website, fax, address, 
            city, postal_code, region, county, parish,
-           cae, activity_description, sector, status, enriched_at
+           cae, activity_description, sector, company_nature, capital,
+           status, registration_date, enriched_at, source_url
     FROM companies 
     WHERE enriched_at IS NOT NULL
     ORDER BY enriched_at DESC
@@ -502,9 +503,10 @@ def get_enriched_dataframe() -> pl.DataFrame:
 def get_search_dataframe() -> pl.DataFrame:
     """Get search results as Polars DataFrame"""
     sql = """
-    SELECT nif, name, source, source_url, phone, email, website, 
-           address, city, postal_code, region, sector, fetched_at
-    FROM companies 
+    SELECT nif, name, source, source_url, phone, email, website, fax,
+           address, city, postal_code, region, county, parish,
+           sector, status, registration_date, fetched_at
+    FROM companies
     WHERE source = 'nif_search'
     ORDER BY fetched_at DESC
     """
@@ -541,3 +543,98 @@ def load_enriched_data() -> Dict[str, Dict]:
 def get_stats() -> Dict[str, Any]:
     """Get overall statistics"""
     return get_contact_coverage()
+
+
+# ==================== LEADS WITHOUT CONTACT ROUTING ====================
+
+def has_contact_info(company: Dict[str, Any]) -> bool:
+    """Check if company has any contact information"""
+    return bool(
+        company.get("phone") or 
+        company.get("email") or 
+        company.get("website")
+    )
+
+
+def upsert_lead_without_contact(company: Dict[str, Any]) -> bool:
+    """Insert or update a lead without contact info in separate table"""
+    safe_company = {
+        "nif": company.get("nif"),
+        "name": company.get("name"),
+        "source": company.get("source"),
+        "source_url": company.get("source_url"),
+        "registration_date": company.get("registration_date"),
+        "status": company.get("status"),
+        "phone": company.get("phone"),
+        "email": company.get("email"),
+        "website": company.get("website"),
+        "fax": company.get("fax"),
+        "address": company.get("address"),
+        "city": company.get("city"),
+        "postal_code": company.get("postal_code"),
+        "region": company.get("region"),
+        "county": company.get("county"),
+        "parish": company.get("parish"),
+        "cae": company.get("cae"),
+        "activity_description": company.get("activity_description"),
+        "sector": company.get("sector"),
+        "company_nature": company.get("company_nature"),
+        "capital": company.get("capital"),
+        "enriched_at": company.get("enriched_at"),
+    }
+    
+    sql = """
+    INSERT INTO leads_without_personal_data (
+        nif, name, source, source_url, registration_date, status,
+        phone, email, website, fax, address, city, postal_code,
+        region, county, parish, cae, activity_description, sector,
+        company_nature, capital, enriched_at
+    ) VALUES (
+        %(nif)s, %(name)s, %(source)s, %(source_url)s, %(registration_date)s, %(status)s,
+        %(phone)s, %(email)s, %(website)s, %(fax)s, %(address)s, %(city)s, %(postal_code)s,
+        %(region)s, %(county)s, %(parish)s, %(cae)s, %(activity_description)s, %(sector)s,
+        %(company_nature)s, %(capital)s, %(enriched_at)s
+    )
+    ON CONFLICT (nif) DO UPDATE SET
+        name = COALESCE(EXCLUDED.name, leads_without_personal_data.name),
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        website = EXCLUDED.website,
+        address = COALESCE(EXCLUDED.address, leads_without_personal_data.address),
+        city = COALESCE(EXCLUDED.city, leads_without_personal_data.city),
+        postal_code = COALESCE(EXCLUDED.postal_code, leads_without_personal_data.postal_code),
+        region = COALESCE(EXCLUDED.region, leads_without_personal_data.region),
+        county = COALESCE(EXCLUDED.county, leads_without_personal_data.county),
+        parish = COALESCE(EXCLUDED.parish, leads_without_personal_data.parish),
+        cae = COALESCE(EXCLUDED.cae, leads_without_personal_data.cae),
+        activity_description = COALESCE(EXCLUDED.activity_description, leads_without_personal_data.activity_description),
+        sector = COALESCE(EXCLUDED.sector, leads_without_personal_data.sector),
+        status = COALESCE(EXCLUDED.status, leads_without_personal_data.status),
+        enriched_at = EXCLUDED.enriched_at,
+        last_verified_at = NOW()
+    """
+    
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, safe_company)
+        return True
+    except Exception as e:
+        print(f"Error upserting lead without contact {company.get('nif')}: {e}")
+        return False
+
+
+def route_company_by_contact(company: Dict[str, Any]) -> str:
+    """
+    Route company to appropriate table based on contact availability.
+    Returns the table name where the company was saved.
+    """
+    if has_contact_info(company):
+        # Has contact info - save to main companies table
+        if upsert_company(company):
+            return "companies"
+        return "error"
+    else:
+        # No contact info - save to leads_without_personal_data
+        if upsert_lead_without_contact(company):
+            return "leads_without_personal_data"
+        return "error"

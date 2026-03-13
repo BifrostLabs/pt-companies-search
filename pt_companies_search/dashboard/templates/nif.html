@@ -14,7 +14,7 @@
             <div class="p-6">
                 <div class="flex items-center space-x-3 mb-10">
                     <span class="text-3xl">🇵🇹</span>
-                    <span class="text-xl font-black tracking-tight text-white">PT<span class="text-blue-500">CORP</span></span>
+                    <span class="text-xl font-black tracking-tight text-white"><span class="text-blue-500">CORP</span></span>
                 </div>
                 
                 <nav class="space-y-2">
@@ -52,6 +52,30 @@
                 </div>
             </header>
 
+            <!-- Coverage Stats -->
+            <div id="coverageStats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                    <div class="text-gray-400 text-sm font-medium mb-2">📞 Phone Coverage</div>
+                    <div id="phoneCoverage" class="text-3xl font-black text-white">--</div>
+                    <div id="phoneDetails" class="text-xs text-gray-500 mt-1">--</div>
+                </div>
+                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                    <div class="text-gray-400 text-sm font-medium mb-2">✉️ Email Coverage</div>
+                    <div id="emailCoverage" class="text-3xl font-black text-white">--</div>
+                    <div id="emailDetails" class="text-xs text-gray-500 mt-1">--</div>
+                </div>
+                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                    <div class="text-gray-400 text-sm font-medium mb-2">🌐 Website Coverage</div>
+                    <div id="websiteCoverage" class="text-3xl font-black text-white">--</div>
+                    <div id="websiteDetails" class="text-xs text-gray-500 mt-1">--</div>
+                </div>
+                <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                    <div class="text-gray-400 text-sm font-medium mb-2">✅ Any Contact</div>
+                    <div id="contactCoverage" class="text-3xl font-black text-green-400">--</div>
+                    <div id="contactDetails" class="text-xs text-gray-500 mt-1">--</div>
+                </div>
+            </div>
+
             <div class="bg-gray-900 rounded-3xl border border-gray-800 shadow-sm overflow-hidden flex flex-col h-[75vh]">
                 <div class="overflow-y-auto flex-1">
                     <table class="w-full text-left border-collapse">
@@ -59,7 +83,7 @@
                             <!-- Header content will be dynamically set by JS -->
                         </thead>
                         <tbody class="divide-y divide-gray-800 text-sm" id="dataTable">
-                            <tr><td colspan="5" class="py-12 text-center text-gray-500 font-medium">Select a data source to begin...</td></tr>
+                            <tr><td colspan="6" class="py-12 text-center text-gray-500 font-medium">Select a data source to begin...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -74,11 +98,12 @@
         function setEnrichedHeader() {
             tableHeader.innerHTML = `
                 <tr>
-                    <th class="py-5 px-8 font-bold">NIF</th>
-                    <th class="py-5 px-8 font-bold">Company Name</th>
-                    <th class="py-5 px-8 font-bold">Region</th>
-                    <th class="py-5 px-8 font-bold">Contact</th>
-                    <th class="py-5 px-8 font-bold w-1/4">Activity</th>
+                    <th class="py-5 px-6 font-bold w-12"></th>
+                    <th class="py-5 px-6 font-bold">NIF</th>
+                    <th class="py-5 px-6 font-bold">Company Name</th>
+                    <th class="py-5 px-6 font-bold">Location</th>
+                    <th class="py-5 px-6 font-bold">Contact</th>
+                    <th class="py-5 px-6 font-bold">CAE / Activity</th>
                 </tr>
             `;
         }
@@ -86,57 +111,245 @@
         function setSearchedHeader() {
             tableHeader.innerHTML = `
                 <tr>
-                    <th class="py-5 px-8 font-bold">NIF</th>
-                    <th class="py-5 px-8 font-bold">Company Name</th>
-                    <th class="py-5 px-8 font-bold">Region</th>
-                    <th class="py-5 px-8 font-bold">Search Term</th>
+                    <th class="py-5 px-6 font-bold w-12"></th>
+                    <th class="py-5 px-6 font-bold">NIF</th>
+                    <th class="py-5 px-6 font-bold">Company Name</th>
+                    <th class="py-5 px-6 font-bold">Location</th>
+                    <th class="py-5 px-6 font-bold">Contact</th>
+                    <th class="py-5 px-6 font-bold">CAE / Activity</th>
                 </tr>
             `;
+        }
+
+        function formatCurrency(value, currency = 'EUR') {
+            if (!value) return '';
+            return new Intl.NumberFormat('pt-PT', { 
+                style: 'currency', 
+                currency: currency,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value);
+        }
+
+        function formatBoolean(value, trueIcon = '✅', falseIcon = '❌') {
+            return value ? trueIcon : falseIcon;
         }
 
         function renderEnrichedData(data) {
             dataTable.innerHTML = '';
             const displayData = data.slice(0, 500);
-            displayData.forEach(r => {
+            
+            displayData.forEach((r, idx) => {
                 const nif = r.nif || '';
                 const nifLink = nif ? `https://www.nif.pt/${nif}/` : '#';
+                const expandId = `expand-${idx}`;
                 
+                // Location info
+                const locationParts = [];
+                if (r.city) locationParts.push(r.city);
+                if (r.county) locationParts.push(r.county);
+                if (r.region) locationParts.push(r.region);
+                const location = locationParts.length > 0 ? locationParts.join(', ') : '<span class="text-gray-600 italic">N/A</span>';
+                
+                // Contact info
                 let contactHtml = '';
-                if (r.phone) contactHtml += `<div class="flex items-center space-x-2"><span class="text-gray-500">📞</span><span>${r.phone}</span></div>`;
-                if (r.email) contactHtml += `<div class="flex items-center space-x-2"><span class="text-gray-500">✉️</span><span>${r.email}</span></div>`;
+                if (r.phone) contactHtml += `<div class="flex items-center space-x-1.5"><span class="text-gray-500">📞</span><span class="text-gray-300">${r.phone}</span></div>`;
+                if (r.email) contactHtml += `<div class="flex items-center space-x-1.5"><span class="text-gray-500">✉️</span><a href="mailto:${r.email}" class="text-blue-400 hover:underline">${r.email}</a></div>`;
+                if (r.website) contactHtml += `<div class="flex items-center space-x-1.5"><span class="text-gray-500">🌐</span><a href="${r.website.startsWith('http') ? r.website : 'https://' + r.website}" target="_blank" class="text-blue-400 hover:underline">${r.website}</a></div>`;
+                
+                // CAE / Activity
+                let caeHtml = '';
+                if (r.cae) caeHtml += `<div class="text-xs font-mono bg-blue-500/10 text-blue-400 px-2 py-1 rounded inline-block mb-1">${r.cae}</div>`;
+                if (r.activity_description) caeHtml += `<div class="text-xs text-gray-400 line-clamp-2">${r.activity_description.substring(0, 100)}${r.activity_description.length > 100 ? '...' : ''}</div>`;
+                
+                // Status badge
+                const statusBadge = r.status === 'active' 
+                    ? '<span class="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-semibold">Active</span>'
+                    : r.status ? `<span class="text-xs bg-yellow-500/10 text-yellow-400 px-2 py-1 rounded-full font-semibold">${r.status}</span>` : '';
 
                 dataTable.innerHTML += `
-                    <tr class="hover:bg-gray-800/40 transition-colors group">
-                        <td class="py-4 px-8 font-mono text-blue-400">
-                            <a href="${nifLink}" target="_blank" class="hover:underline">${nif}</a>
+                    <tr class="hover:bg-gray-800/40 transition-colors group cursor-pointer" onclick="toggleExpand('${expandId}')">
+                        <td class="py-4 px-6">
+                            <svg class="w-4 h-4 text-gray-500 transform transition-transform expand-icon" id="icon-${expandId}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
                         </td>
-                        <td class="py-4 px-8 text-white font-semibold">${r.name || '<span class="italic text-gray-600">No Name</span>'}</td>
-                        <td class="py-4 px-8 text-gray-400">${r.region || '<span class="text-yellow-600 bg-yellow-500/10 px-2 py-1 text-xs rounded-full font-semibold">Requires Enrichment</span>'}</td>
-                        <td class="py-4 px-8 text-gray-400 text-xs space-y-1">${contactHtml || '<span class="text-gray-600 italic">None</span>'}</td>
-                        <td class="py-4 px-8 text-gray-500 text-xs">${r.activity_desc || ''}</td>
+                        <td class="py-4 px-6 font-mono text-blue-400">
+                            <a href="${nifLink}" target="_blank" class="hover:underline" onclick="event.stopPropagation()">${nif}</a>
+                        </td>
+                        <td class="py-4 px-6">
+                            <div class="text-white font-semibold">${r.name || '<span class="italic text-gray-600">No Name</span>'}</div>
+                            ${r.company_nature ? `<div class="text-xs text-purple-400 mt-1">${r.company_nature}</div>` : ''}
+                            ${r.capital ? `<div class="text-xs text-gray-500 mt-0.5">Capital: ${formatCurrency(r.capital)}</div>` : ''}
+                        </td>
+                        <td class="py-4 px-6 text-gray-400 text-xs">${location}</td>
+                        <td class="py-4 px-6 text-gray-400 text-xs space-y-1">${contactHtml || '<span class="text-gray-600 italic">None</span>'}</td>
+                        <td class="py-4 px-6 text-xs">${caeHtml || '<span class="text-gray-600 italic">N/A</span>'}</td>
+                    </tr>
+                    <tr id="${expandId}" class="hidden bg-gray-950/50">
+                        <td colspan="6" class="py-0">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 text-sm">
+                                <!-- Business Info -->
+                                <div class="space-y-3">
+                                    <h3 class="font-bold text-gray-300 text-xs uppercase tracking-wider mb-3">🏢 Business Information</h3>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Company Nature:</span>
+                                            <span class="text-gray-300 font-medium">${r.company_nature || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Capital:</span>
+                                            <span class="text-gray-300 font-medium">${r.capital ? formatCurrency(r.capital) : 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">CAE:</span>
+                                            <span class="text-gray-300 font-mono">${r.cae || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Sector:</span>
+                                            <span class="text-gray-300">${r.sector || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Status:</span>
+                                            <span>${statusBadge || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Location Info -->
+                                <div class="space-y-3">
+                                    <h3 class="font-bold text-gray-300 text-xs uppercase tracking-wider mb-3">📍 Location</h3>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <span class="text-gray-500 block text-xs">Address:</span>
+                                            <span class="text-gray-300">${r.address || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">City:</span>
+                                            <span class="text-gray-300">${r.city || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Postal Code:</span>
+                                            <span class="text-gray-300 font-mono">${r.postal_code || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">County:</span>
+                                            <span class="text-gray-300">${r.county || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Region:</span>
+                                            <span class="text-gray-300">${r.region || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Parish:</span>
+                                            <span class="text-gray-300">${r.parish || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Contact Info -->
+                                <div class="space-y-3">
+                                    <h3 class="font-bold text-gray-300 text-xs uppercase tracking-wider mb-3">📞 Contact</h3>
+                                    <div class="space-y-2">
+                                        <div>
+                                            <span class="text-gray-500 block text-xs">Phone:</span>
+                                            <span class="text-gray-300">${r.phone || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500 block text-xs">Email:</span>
+                                            <a href="mailto:${r.email}" class="text-blue-400 hover:underline">${r.email || 'N/A'}</a>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500 block text-xs">Website:</span>
+                                            ${r.website ? `<a href="${r.website.startsWith('http') ? r.website : 'https://' + r.website}" target="_blank" class="text-blue-400 hover:underline">${r.website}</a>` : '<span class="text-gray-600">N/A</span>'}
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500 block text-xs">Fax:</span>
+                                            <span class="text-gray-300">${r.fax || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <h3 class="font-bold text-gray-300 text-xs uppercase tracking-wider mb-3 mt-6">📅 Dates</h3>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Start Date:</span>
+                                            <span class="text-gray-300">${r.start_date || 'N/A'}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Enriched At:</span>
+                                            <span class="text-gray-300 text-xs">${r.enriched_at ? new Date(r.enriched_at).toLocaleDateString() : 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Activity Description (Full Width) -->
+                                ${r.activity_description ? `
+                                <div class="md:col-span-3 mt-4 pt-4 border-t border-gray-800">
+                                    <h3 class="font-bold text-gray-300 text-xs uppercase tracking-wider mb-2">📝 Activity Description</h3>
+                                    <p class="text-gray-400 text-sm leading-relaxed">${r.activity_description}</p>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </td>
                     </tr>
                 `;
             });
         }
 
         function renderSearchedData(data) {
-            dataTable.innerHTML = '';
-            const displayData = data.slice(0, 500);
-            displayData.forEach(r => {
-                const nif = r.nif || '';
-                const nifLink = nif ? `https://www.nif.pt/${nif}/` : '#';
+            // Use the same comprehensive view for searched data
+            renderEnrichedData(data);
+        }
 
-                dataTable.innerHTML += `
-                    <tr class="hover:bg-gray-800/40 transition-colors group">
-                        <td class="py-4 px-8 font-mono text-blue-400">
-                            <a href="${nifLink}" target="_blank" class="hover:underline">${nif}</a>
-                        </td>
-                        <td class="py-4 px-8 text-white font-semibold">${r.name || '<span class="italic text-gray-600">No Name</span>'}</td>
-                        <td class="py-4 px-8 text-gray-400">${r.region || '<span class="italic text-gray-600">N/A</span>'}</td>
-                        <td class="py-4 px-8 text-gray-500 font-mono text-xs">${r.search_term || ''}</td>
-                    </tr>
-                `;
-            });
+        function toggleExpand(id) {
+            const row = document.getElementById(id);
+            const icon = document.getElementById('icon-' + id);
+            
+            if (row.classList.contains('hidden')) {
+                row.classList.remove('hidden');
+                icon.classList.add('rotate-90');
+            } else {
+                row.classList.add('hidden');
+                icon.classList.remove('rotate-90');
+            }
+        }
+
+        function loadCoverageStats() {
+            fetch('/api/nif/coverage')
+                .then(response => {
+                    if(response.status === 401) { window.location.href = '/login'; }
+                    return response.json();
+                })
+                .then(data => {
+                    // Use enriched stats if available, otherwise use searched
+                    const stats = data.enriched?.total > 0 ? data.enriched : data.searched;
+                    
+                    if (stats && stats.total > 0) {
+                        document.getElementById('phoneCoverage').textContent = `${stats.phone_pct}%`;
+                        document.getElementById('phoneDetails').textContent = `${stats.with_phone} of ${stats.total} companies`;
+                        
+                        document.getElementById('emailCoverage').textContent = `${stats.email_pct}%`;
+                        document.getElementById('emailDetails').textContent = `${stats.with_email} of ${stats.total} companies`;
+                        
+                        document.getElementById('websiteCoverage').textContent = `${stats.website_pct}%`;
+                        document.getElementById('websiteDetails').textContent = `${stats.with_website} of ${stats.total} companies`;
+                        
+                        document.getElementById('contactCoverage').textContent = `${stats.contact_pct}%`;
+                        document.getElementById('contactDetails').textContent = `${stats.with_any_contact} of ${stats.total} companies`;
+                    } else {
+                        document.getElementById('phoneCoverage').textContent = '0%';
+                        document.getElementById('emailCoverage').textContent = '0%';
+                        document.getElementById('websiteCoverage').textContent = '0%';
+                        document.getElementById('contactCoverage').textContent = '0%';
+                        document.getElementById('phoneDetails').textContent = 'No data available';
+                        document.getElementById('emailDetails').textContent = 'No data available';
+                        document.getElementById('websiteDetails').textContent = 'No data available';
+                        document.getElementById('contactDetails').textContent = 'No data available';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching coverage stats:', err);
+                });
         }
 
         function loadData(type) {
@@ -153,7 +366,7 @@
                 setSearchedHeader();
             }
 
-            dataTable.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-gray-500 font-medium">Fetching ${type} data...</td></tr>`;
+            dataTable.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-gray-500 font-medium">Fetching ${type} data...</td></tr>`;
             
             fetch('/api/nif/' + type)
                 .then(response => {
@@ -162,7 +375,7 @@
                 })
                 .then(data => {
                     if (!data || data.length === 0) {
-                        dataTable.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-gray-500 font-medium">No ${type} data available.</td></tr>`;
+                        dataTable.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-gray-500 font-medium">No ${type} data available.</td></tr>`;
                         return;
                     }
                     if (type === 'enriched') {
@@ -173,10 +386,12 @@
                 })
                 .catch(err => {
                     console.error(`Error fetching ${type} data:`, err);
-                    dataTable.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-red-400 font-medium">Error loading data. See console for details.</td></tr>`;
+                    dataTable.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-400 font-medium">Error loading data. See console for details.</td></tr>`;
                 });
         }
 
+        // Load coverage stats and data on page load
+        loadCoverageStats();
         loadData('enriched');
     </script>
 </body>

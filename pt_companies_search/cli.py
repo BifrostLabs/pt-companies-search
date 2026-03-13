@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pt_companies_search.core.config import config
-from pt_companies_search.core.database import test_connection, upsert_company
+from pt_companies_search.core.database import test_connection, upsert_company, route_company_by_contact
 from pt_companies_search.scraper.einforma import fetch_new_companies, save_daily_snapshot
 from pt_companies_search.scraper.nif import search_multiple_pages
 from pt_companies_search.enricher.nif_enrich import RateLimiter, enrich_company, wait_for_available_slot
@@ -59,7 +59,8 @@ def run_enrich(args):
         print("❌ NIF_API_KEY not set.")
         return
     
-    from pt_companies_search.core.database import search_companies
+    from pt_companies_search.core.database import search_companies, route_company_by_contact
+    from pt_companies_search.enricher.key_rotation import APIKeyRotator, load_api_keys
     
     # Get companies that haven't been enriched yet, optionally filtering by dashboard sectors
     companies = search_companies(
@@ -72,22 +73,47 @@ def run_enrich(args):
         print("✅ No companies to enrich.")
         return
     
+    # Initialize key rotator
+    try:
+        key_rotator = APIKeyRotator(load_api_keys())
+        print(key_rotator.get_status_report())
+    except Exception as e:
+        print(f"⚠️  Key rotation not available: {e}")
+        print("Using single API key mode")
+        key_rotator = None
+    
     rate_limiter = RateLimiter()
     print(f"🚀 Starting enrichment for {len(companies)} companies...")
     
     for i, company in enumerate(companies, 1):
         if not wait_for_available_slot(rate_limiter, verbose=True):
             break
+        
+        # Get current API key (with rotation support)
+        if key_rotator:
+            api_key = key_rotator.get_current_key()
+        else:
+            api_key = config.NIF_API_KEY
             
         print(f"[{i}/{len(companies)}] Enriching {company['nif']} - {company['name']}...")
-        enriched = enrich_company(company['nif'], config.NIF_API_KEY, rate_limiter)
+        enriched = enrich_company(company['nif'], api_key, rate_limiter)
         
         if enriched:
             enriched['source'] = 'nif_api'
-            upsert_company(enriched)
-            print(f"   ✅ Success")
+            table = route_company_by_contact(enriched)
+            if table == "companies":
+                print(f"   ✅ Saved to main table (has contact)")
+            elif table == "leads_without_personal_data":
+                print(f"   ✅ Saved to leads table (no contact)")
+            else:
+                print(f"   ❌ Failed to save")
         else:
             print(f"   ❌ Failed")
+            
+            # If enrichment failed, try rotating the key
+            if key_rotator:
+                key_rotator.rotate_key()
+                print(key_rotator.get_status_report())
 
 def main():
     parser = argparse.ArgumentParser(description="PT Companies Search CLI")

@@ -208,3 +208,11 @@ def wait_for_available_slot(rate_limiter: RateLimiter, verbose: bool = True) -> 
         return True
         
     return False
+
+
+# Key Rotation Support
+def create_key_rotator():
+    """Create an API key rotator from environment variables"""
+    from pt_companies_search.enricher.key_rotation import APIKeyRotator, load_api_keys
+    keys = load_api_keys()
+    return APIKeyRotator(keys)
