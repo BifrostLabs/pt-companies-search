@@ -148,26 +148,43 @@ def enrich_company(nif: str, api_key: str, rate_limiter: RateLimiter) -> Optiona
             geo = record.get("geo", {})
             structure = record.get("structure", {})
 
+            # Get title/name - use title field, map to name for database compatibility
+            company_name = record.get("title") or record.get("alias") or ""
+            
+            # Get contact info
+            phone = contacts.get("phone")
+            email = contacts.get("email")
+            website = contacts.get("website")
+            fax = contacts.get("fax")
+            
             enriched = {
                 "nif": str(nif),
-                "title": record.get("title") or record.get("alias"),
+                "name": company_name,  # Use 'name' for database compatibility
+                "title": company_name,  # Keep title for backwards compatibility
                 "address": place.get("address") or record.get("address"),
                 "city": place.get("city") or record.get("city"),
                 "postal_code": f"{place.get('pc4') or record.get('pc4', '')}-{place.get('pc3') or record.get('pc3', '')}".strip("-"),
-                "phone": contacts.get("phone"),
-                "email": contacts.get("email"),
-                "website": contacts.get("website"),
-                "fax": contacts.get("fax"),
+                "phone": phone,
+                "email": email,
+                "website": website,
+                "fax": fax,
                 "cae": record.get("cae"),
                 "activity": record.get("activity"),
+                "activity_description": record.get("activity"),  # Map to activity_description for DB
                 "status": record.get("status"),
-                "nature": structure.get("nature"),
+                "company_nature": structure.get("nature"),  # Use correct field name
+                "nature": structure.get("nature"),  # Keep for backwards compatibility
                 "capital": structure.get("capital"),
                 "region": geo.get("region"),
                 "county": geo.get("county"),
                 "parish": geo.get("parish"),
                 "enriched_at": datetime.now().isoformat(),
-                "enriched_source": "nif.pt"
+                "enriched_source": "nif.pt",
+                "seo_url": record.get("seo_url"),
+                "start_date": record.get("start_date"),
+                "racius": record.get("racius"),
+                "pc4": place.get("pc4") or record.get("pc4"),
+                "pc3": place.get("pc3") or record.get("pc3"),
             }
             # Clean None or empty strings
             return {k: v for k, v in enriched.items() if v not in [None, "", "-"]}
