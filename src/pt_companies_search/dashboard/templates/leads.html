@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads | PT Companies</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-[#0b0f1a] text-gray-100 min-h-screen">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-full md:w-64 bg-gray-900 border-r border-gray-800 flex-shrink-0">
+            <div class="p-6">
+                <div class="flex items-center space-x-3 mb-10">
+                    <span class="text-3xl">🇵🇹</span>
+                    <span class="text-xl font-black tracking-tight text-white"><span class="text-blue-500">CORP</span></span>
+                </div>
+                <nav class="space-y-2">
+                    <a href="/" class="flex items-center space-x-3 p-3 rounded-xl transition-all {% if active_page == 'dashboard' %}bg-blue-600/10 text-blue-400 border border-blue-600/20{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                        <span class="font-semibold">Dashboard</span>
+                    </a>
+                    <a href="/einforma" class="flex items-center space-x-3 p-3 rounded-xl transition-all {% if active_page == 'einforma' %}bg-blue-600/10 text-blue-400 border border-blue-600/20{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span class="font-semibold">eInforma</span>
+                    </a>
+                    <a href="/nif" class="flex items-center space-x-3 p-3 rounded-xl transition-all {% if active_page == 'nif' %}bg-blue-600/10 text-blue-400 border border-blue-600/20{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <span class="font-semibold">NIF.pt</span>
+                    </a>
+                    <a href="/leads" class="flex items-center space-x-3 p-3 rounded-xl transition-all {% if active_page == 'leads' %}bg-green-600/10 text-green-400 border border-green-600/20{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                        <span class="font-semibold">Leads</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="mt-auto p-6">
+                <a href="/logout" class="flex items-center space-x-3 p-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <span class="font-semibold">Sign Out</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 md:p-8 lg:p-10 overflow-y-auto">
+            <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <div>
+                    <h1 class="text-4xl font-black text-white tracking-tight mb-2">Call Leads</h1>
+                    <p class="text-gray-400 font-medium">Companies with phone numbers ready for outreach</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a id="exportBtn" href="#" onclick="exportCSV(event)"
+                       class="bg-green-700 hover:bg-green-600 text-white px-5 py-2.5 rounded-xl flex items-center text-sm font-semibold transition-all">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Export CSV
+                    </a>
+                </div>
+            </header>
+
+            <!-- Status Stats -->
+            <div id="statusStats" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8"></div>
+
+            <!-- Filters -->
+            <div class="bg-gray-900 rounded-2xl border border-gray-800 p-5 mb-6 flex flex-col sm:flex-row gap-4">
+                <input id="searchInput" type="text" placeholder="Search by name or city..."
+                    class="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                    oninput="debounceSearch()" />
+                <select id="statusFilter" onchange="loadLeads()"
+                    class="bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="">All statuses</option>
+                    <option value="new">New</option>
+                    <option value="called">Called</option>
+                    <option value="callback">Callback</option>
+                    <option value="interested">Interested</option>
+                    <option value="no_answer">No Answer</option>
+                    <option value="not_interested">Not Interested</option>
+                    <option value="invalid">Invalid</option>
+                </select>
+                <select id="sectorFilter" onchange="loadLeads()"
+                    class="bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="">All sectors</option>
+                </select>
+            </div>
+
+            <!-- Lead count -->
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-4" id="leadCount">Loading...</div>
+
+            <!-- Table -->
+            <div class="bg-gray-900 rounded-3xl border border-gray-800 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-950/80 text-xs uppercase tracking-widest text-gray-500 sticky top-0">
+                            <tr>
+                                <th class="py-4 px-5 font-bold">Company</th>
+                                <th class="py-4 px-5 font-bold">Phone</th>
+                                <th class="py-4 px-5 font-bold">Location</th>
+                                <th class="py-4 px-5 font-bold">Sector</th>
+                                <th class="py-4 px-5 font-bold">Status</th>
+                                <th class="py-4 px-5 font-bold">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm" id="leadsTable">
+                            <tr><td colspan="6" class="py-12 text-center text-gray-500">Loading leads...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Status update modal -->
+            <div id="statusModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                <div class="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-md shadow-2xl">
+                    <h3 class="text-lg font-bold text-white mb-1" id="modalTitle">Update Status</h3>
+                    <p class="text-sm text-gray-400 mb-5" id="modalCompany"></p>
+                    <input type="hidden" id="modalNif" />
+                    <div class="grid grid-cols-2 gap-2 mb-5">
+                        <button onclick="setStatus('called')"     class="status-btn bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-600/30 py-2.5 rounded-xl text-sm font-semibold">Called</button>
+                        <button onclick="setStatus('callback')"   class="status-btn bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-300 border border-yellow-600/30 py-2.5 rounded-xl text-sm font-semibold">Callback</button>
+                        <button onclick="setStatus('interested')" class="status-btn bg-green-600/20 hover:bg-green-600/40 text-green-300 border border-green-600/30 py-2.5 rounded-xl text-sm font-semibold">Interested</button>
+                        <button onclick="setStatus('no_answer')"  class="status-btn bg-orange-600/20 hover:bg-orange-600/40 text-orange-300 border border-orange-600/30 py-2.5 rounded-xl text-sm font-semibold">No Answer</button>
+                        <button onclick="setStatus('not_interested')" class="status-btn bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-600/30 py-2.5 rounded-xl text-sm font-semibold">Not Interested</button>
+                        <button onclick="setStatus('invalid')"    class="status-btn bg-gray-700/50 hover:bg-gray-700 text-gray-300 border border-gray-600/30 py-2.5 rounded-xl text-sm font-semibold">Invalid #</button>
+                    </div>
+                    <textarea id="modalNotes" placeholder="Optional notes..." rows="2"
+                        class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 mb-4 resize-none"></textarea>
+                    <div class="flex justify-end gap-3">
+                        <button onclick="closeModal()" class="px-5 py-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const STATUS_STYLES = {
+            new:            'bg-blue-500/10 text-blue-400 border-blue-500/30',
+            called:         'bg-purple-500/10 text-purple-400 border-purple-500/30',
+            callback:       'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
+            interested:     'bg-green-500/10 text-green-400 border-green-500/30',
+            no_answer:      'bg-orange-500/10 text-orange-400 border-orange-500/30',
+            not_interested: 'bg-red-500/10 text-red-400 border-red-500/30',
+            invalid:        'bg-gray-700/50 text-gray-400 border-gray-600/30',
+        };
+        const STATUS_LABELS = {
+            new: 'New', called: 'Called', callback: 'Callback',
+            interested: 'Interested', no_answer: 'No Answer',
+            not_interested: 'Not Interested', invalid: 'Invalid',
+        };
+
+        let searchTimer = null;
+        let allSectors = new Set();
+
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadLeads, 350);
+        }
+
+        function buildApiUrl(extra = '') {
+            const status = document.getElementById('statusFilter').value;
+            const sector = document.getElementById('sectorFilter').value;
+            const q = document.getElementById('searchInput').value.trim();
+            const params = new URLSearchParams();
+            if (status) params.set('status', status);
+            if (sector) params.set('sector', sector);
+            if (q) params.set('q', q);
+            return `/api/leads${extra}?${params.toString()}`;
+        }
+
+        function loadStats() {
+            fetch('/api/leads/stats')
+                .then(r => r.json())
+                .then(data => {
+                    const container = document.getElementById('statusStats');
+                    const total = Object.values(data).reduce((a, b) => a + b, 0);
+                    const order = ['new', 'callback', 'called', 'interested', 'no_answer', 'not_interested', 'invalid'];
+                    const colors = {
+                        new: 'blue', callback: 'yellow', called: 'purple',
+                        interested: 'green', no_answer: 'orange', not_interested: 'red', invalid: 'gray'
+                    };
+                    container.innerHTML = order.map(s => {
+                        const count = data[s] || 0;
+                        const c = colors[s] || 'gray';
+                        return `<div class="bg-gray-900 rounded-2xl border border-gray-800 p-4 cursor-pointer hover:border-${c}-600/40 transition-all"
+                                     onclick="quickFilter('${s}')">
+                            <div class="text-${c}-400 text-xs font-bold uppercase tracking-wider mb-2">${STATUS_LABELS[s] || s}</div>
+                            <div class="text-2xl font-black text-white">${count.toLocaleString()}</div>
+                        </div>`;
+                    }).join('') + `<div class="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+                        <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Total</div>
+                        <div class="text-2xl font-black text-white">${total.toLocaleString()}</div>
+                    </div>`;
+                }).catch(() => {});
+        }
+
+        function quickFilter(status) {
+            document.getElementById('statusFilter').value = status;
+            loadLeads();
+        }
+
+        function loadLeads() {
+            const tbody = document.getElementById('leadsTable');
+            tbody.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-gray-500">Loading...</td></tr>';
+
+            fetch(buildApiUrl())
+                .then(r => { if (r.status === 401) { location.href = '/login'; } return r.json(); })
+                .then(data => {
+                    // Collect sectors for filter
+                    data.forEach(l => { if (l.sector) allSectors.add(l.sector); });
+                    populateSectorFilter();
+
+                    document.getElementById('leadCount').textContent = `${data.length} leads`;
+                    tbody.innerHTML = '';
+
+                    if (!data.length) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-gray-500">No leads match filters.</td></tr>';
+                        return;
+                    }
+
+                    data.forEach(lead => {
+                        const st = lead.lead_status || 'new';
+                        const stStyle = STATUS_STYLES[st] || STATUS_STYLES.new;
+                        const stLabel = STATUS_LABELS[st] || st;
+                        const location = [lead.city, lead.region].filter(Boolean).join(', ') || '—';
+                        const emailHtml = lead.email
+                            ? `<div class="text-xs text-gray-500"><a href="mailto:${lead.email}" class="hover:text-blue-400">${lead.email}</a></div>` : '';
+                        tbody.innerHTML += `
+                        <tr class="hover:bg-gray-800/40 transition-colors group">
+                            <td class="py-4 px-5">
+                                <div class="font-semibold text-white">${lead.name}</div>
+                                <div class="text-xs text-gray-500 font-mono">${lead.nif}</div>
+                                ${lead.website ? `<div class="text-xs text-gray-500"><a href="${lead.website.startsWith('http') ? lead.website : 'https://' + lead.website}" target="_blank" class="hover:text-blue-400 truncate max-w-xs inline-block">${lead.website}</a></div>` : ''}
+                            </td>
+                            <td class="py-4 px-5">
+                                <a href="tel:${lead.phone}" class="text-green-400 font-mono font-semibold hover:underline">${lead.phone}</a>
+                                ${emailHtml}
+                            </td>
+                            <td class="py-4 px-5 text-gray-400 text-xs">${location}</td>
+                            <td class="py-4 px-5">
+                                ${lead.sector ? `<span class="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded">${lead.sector}</span>` : '<span class="text-gray-600">—</span>'}
+                            </td>
+                            <td class="py-4 px-5">
+                                <span class="text-xs border px-2.5 py-1 rounded-full font-semibold ${stStyle}">${stLabel}</span>
+                                ${lead.lead_notes ? `<div class="text-xs text-gray-500 mt-1 max-w-xs truncate" title="${lead.lead_notes}">${lead.lead_notes}</div>` : ''}
+                            </td>
+                            <td class="py-4 px-5">
+                                <button onclick="openModal('${lead.nif}', '${(lead.name || '').replace(/'/g, "\\'")}')"
+                                    class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg font-semibold transition-all">
+                                    Update
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                })
+                .catch(() => {
+                    tbody.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-red-400">Error loading leads.</td></tr>';
+                });
+        }
+
+        function populateSectorFilter() {
+            const sel = document.getElementById('sectorFilter');
+            const current = sel.value;
+            sel.innerHTML = '<option value="">All sectors</option>';
+            [...allSectors].sort().forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s; opt.textContent = s;
+                if (s === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+
+        function openModal(nif, name) {
+            document.getElementById('modalNif').value = nif;
+            document.getElementById('modalCompany').textContent = name;
+            document.getElementById('modalNotes').value = '';
+            document.getElementById('statusModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('statusModal').classList.add('hidden');
+        }
+
+        function setStatus(status) {
+            const nif = document.getElementById('modalNif').value;
+            const notes = document.getElementById('modalNotes').value.trim();
+            fetch(`/api/leads/${nif}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status, notes: notes || null }),
+            }).then(r => {
+                if (!r.ok) return;
+                closeModal();
+                loadLeads();
+                loadStats();
+            });
+        }
+
+        function exportCSV(e) {
+            e.preventDefault();
+            window.location.href = buildApiUrl('/export');
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('statusModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        loadStats();
+        loadLeads();
+    </script>
+</body>
+</html>

@@ -1,7 +1,0 @@
-FROM python:3.13-slim
-WORKDIR /app
-COPY charts/pt-companies/files/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY charts/pt-companies/files/db.py .
-COPY charts/pt-companies/files/nif_enrich.py .
-ENTRYPOINT ["python3", "nif_enrich.py"]

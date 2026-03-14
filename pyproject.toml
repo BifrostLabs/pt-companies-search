@@ -29,5 +29,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 
-[tool.setuptools]
-packages = ["pt_companies_search"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"pt_companies_search.dashboard" = ["templates/*.html"]

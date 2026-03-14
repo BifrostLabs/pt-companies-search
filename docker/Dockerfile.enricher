@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package files
 COPY pyproject.toml .
 COPY README.md .
-COPY pt_companies_search/ ./pt_companies_search/
+COPY src/ ./src/
 
 # Install as package
 RUN pip install --no-cache-dir .
@@ -23,4 +23,4 @@ RUN useradd -m -u 1000 appuser && \
 USER appuser
 
 # Run enricher via CLI
-CMD ["python", "-m", "pt_companies_search.cli", "enrich", "--source", "historical"]
+CMD ["python", "-m", "pt_companies_search.cli", "enrich"]

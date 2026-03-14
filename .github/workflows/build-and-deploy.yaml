@@ -2,179 +2,161 @@ name: Build and Deploy
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
     paths-ignore:
       - '**.md'
       - 'data/**'
-      - '.streamlit/**'
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
+      force_all:
+        description: 'Build all images even if unchanged'
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}
+  ORG: bifrostlabs
   HELM_CHARTS_REPO: BifrostLabs/helm-charts
 
 jobs:
-  # Detect changes and determine what to build
   detect-changes:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       dashboard: ${{ steps.filter.outputs.dashboard }}
-      scraper: ${{ steps.filter.outputs.scraper }}
-      enricher: ${{ steps.filter.outputs.enricher }}
-      searcher: ${{ steps.filter.outputs.searcher }}
-      any-python: ${{ steps.filter.outputs.any-python }}
+      scraper:   ${{ steps.filter.outputs.scraper }}
+      enricher:  ${{ steps.filter.outputs.enricher }}
+      searcher:  ${{ steps.filter.outputs.searcher }}
+      any:       ${{ steps.filter.outputs.any }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             dashboard:
               - 'pt_companies_search/dashboard/**'
-              - 'dashboard.py'
-              - 'requirements.txt'
+              - 'pt_companies_search/core/**'
+              - 'pt_companies_search/utils/**'
               - 'pyproject.toml'
               - 'docker/Dockerfile.dashboard'
             scraper:
-              - 'pt_companies_search/scraper/**'
+              - 'pt_companies_search/scraper/einforma.py'
               - 'pt_companies_search/core/**'
-              - 'requirements.txt'
+              - 'pt_companies_search/utils/**'
               - 'pyproject.toml'
               - 'docker/Dockerfile.scraper'
             enricher:
               - 'pt_companies_search/enricher/**'
               - 'pt_companies_search/core/**'
-              - 'requirements.txt'
+              - 'pt_companies_search/utils/**'
               - 'pyproject.toml'
               - 'docker/Dockerfile.enricher'
             searcher:
               - 'pt_companies_search/scraper/nif.py'
               - 'pt_companies_search/core/**'
-              - 'requirements.txt'
+              - 'pt_companies_search/utils/**'
               - 'pyproject.toml'
               - 'docker/Dockerfile.searcher'
-            any-python:
+            any:
               - '**.py'
-              - 'requirements.txt'
               - 'pyproject.toml'
               - 'docker/**'
 
-  # Build Docker images
   build:
     needs: detect-changes
-    if: needs.detect-changes.outputs.any-python == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.any == 'true' || inputs.force_all
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        component:
-          - name: dashboard
-            dockerfile: Dockerfile.dashboard
-          - name: scraper
-            dockerfile: Dockerfile.scraper
-          - name: enricher
-            dockerfile: Dockerfile.enricher
-          - name: searcher
-            dockerfile: Dockerfile.searcher
+        include:
+          - component: dashboard
+            changed: ${{ needs.detect-changes.outputs.dashboard }}
+          - component: scraper
+            changed: ${{ needs.detect-changes.outputs.scraper }}
+          - component: enricher
+            changed: ${{ needs.detect-changes.outputs.enricher }}
+          - component: searcher
+            changed: ${{ needs.detect-changes.outputs.searcher }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Skip unchanged
+        if: matrix.changed != 'true' && !inputs.force_all
+        run: echo "No changes for ${{ matrix.component }}, skipping."
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true' || inputs.force_all
 
       - name: Set up Docker Buildx
+        if: matrix.changed == 'true' || inputs.force_all
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to GHCR
+        if: matrix.changed == 'true' || inputs.force_all
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: 0xPuncker
+          username: ${{ github.actor }}
           password: ${{ secrets.CR_PAT }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/pt-companies-${{ matrix.component.name }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
+      - name: Build and push ${{ matrix.component }}
+        if: matrix.changed == 'true' || inputs.force_all
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/${{ matrix.component.dockerfile }}
+          file: ./docker/Dockerfile.${{ matrix.component }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/pt-companies-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/pt-companies-${{ matrix.component }}:latest
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
-  # Update Helm chart values and trigger ArgoCD sync
-  deploy:
-    needs: [detect-changes, build]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+  sync-helm:
+    needs: build
+    if: always() && needs.build.result != 'failure' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      packages: read
+      contents: read
     steps:
-      - name: Checkout Helm Charts
+      - name: Checkout helm-charts
         uses: actions/checkout@v4
         with:
           repository: ${{ env.HELM_CHARTS_REPO }}
           token: ${{ secrets.CR_PAT }}
           fetch-depth: 0
 
-      - name: Configure Git
+      - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update image tags
+      - name: Update values-image.yaml
         env:
           SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Update values with new image tag
           cat > charts/pt-companies/values-image.yaml << EOF
-          # Auto-generated by GitHub Actions
-          # Commit: ${SHA}
-          # Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
+          # Auto-generated by GitHub Actions — do not edit manually
+          # Source commit: ${SHA}
+          # Built: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          # Run: ${RUN_URL}
+
           dashboard:
             image:
               tag: "${SHA}"
-          
+
           scraper:
             image:
               tag: "${SHA}"
-          
+
           enricher:
             image:
               tag: "${SHA}"
-          
+
           searcher:
             image:
               tag: "${SHA}"
@@ -184,44 +166,8 @@ jobs:
         run: |
           git add charts/pt-companies/values-image.yaml
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No changes to values-image.yaml, skipping commit."
           else
-            git commit -m "chore: update pt-companies image tags to ${SHA}"
+            git commit -m "chore(pt-companies): bump image tags to ${GITHUB_SHA::8}"
             git push
           fi
-
-      - name: Trigger ArgoCD sync
-        if: success()
-        run: |
-          # ArgoCD will auto-sync when it detects the new commit
-          # This is optional - only needed if you want immediate sync
-          echo "ArgoCD will auto-sync from the new commit"
-
-  # Create GitHub release on tag
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          generate_release_notes: true
-          body: |
-            ## PT Companies Release ${{ steps.version.outputs.VERSION }}
-            
-            ### Docker Images
-            - `ghcr.io/${{ env.IMAGE_PREFIX }}/pt-companies-dashboard:${{ steps.version.outputs.VERSION }}`
-            - `ghcr.io/${{ env.IMAGE_PREFIX }}/pt-companies-scraper:${{ steps.version.outputs.VERSION }}`
-            - `ghcr.io/${{ env.IMAGE_PREFIX }}/pt-companies-enricher:${{ steps.version.outputs.VERSION }}`
-            - `ghcr.io/${{ env.IMAGE_PREFIX }}/pt-companies-searcher:${{ steps.version.outputs.VERSION }}`

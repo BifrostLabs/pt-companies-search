@@ -1,13 +1,9 @@
+# Fallback manual triggers — production scheduling is handled by k8s CronJobs in Helm.
+# Use workflow_dispatch to trigger a one-off run from GitHub UI or API.
+
 name: Scheduled Jobs
 
 on:
-  schedule:
-    # Run scraper every 6 hours
-    - cron: '0 */6 * * *'
-    # Run enricher daily at 2 AM UTC
-    - cron: '0 2 * * *'
-    # Run searcher every 12 hours
-    - cron: '0 */12 * * *'
   workflow_dispatch:
     inputs:
       job:
@@ -21,72 +17,50 @@ on:
           - search
 
 jobs:
-  scrape:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *' || github.event.inputs.job == 'scrape'
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
+
+      - name: Install package
+        run: pip install --no-cache-dir .
+
       - name: Run scraper
+        if: inputs.job == 'scrape'
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
+          DB_HOST:     ${{ secrets.DB_HOST }}
+          DB_PORT:     ${{ secrets.DB_PORT }}
+          DB_NAME:     ${{ secrets.DB_NAME }}
+          DB_USER:     ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        run: python scraper.py
+        run: pt-search scrape --pages 10
 
-  enrich:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 2 * * *' || github.event.inputs.job == 'enrich'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
       - name: Run enricher
+        if: inputs.job == 'enrich'
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          NIF_API_KEY: ${{ secrets.NIF_API_KEY }}
-        run: python nif_enrich.py --source historical
+          DB_HOST:       ${{ secrets.DB_HOST }}
+          DB_PORT:       ${{ secrets.DB_PORT }}
+          DB_NAME:       ${{ secrets.DB_NAME }}
+          DB_USER:       ${{ secrets.DB_USER }}
+          DB_PASSWORD:   ${{ secrets.DB_PASSWORD }}
+          NIF_API_KEY:   ${{ secrets.NIF_API_KEY }}
+          NIF_API_KEY_2: ${{ secrets.NIF_API_KEY_2 }}
+          NIF_API_KEY_3: ${{ secrets.NIF_API_KEY_3 }}
+        run: pt-search enrich --limit 100
 
-  search:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 */12 * * *' || github.event.inputs.job == 'search'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
       - name: Run searcher
+        if: inputs.job == 'search'
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
+          DB_HOST:     ${{ secrets.DB_HOST }}
+          DB_PORT:     ${{ secrets.DB_PORT }}
+          DB_NAME:     ${{ secrets.DB_NAME }}
+          DB_USER:     ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        run: python nif_search.py "TECNOLOGIA SOFTWARE CONSULTORIA CONSTRUCAO" --pages 10
+        run: |
+          pt-search search "TECNOLOGIA" --pages 5
+          pt-search search "CONSULTORIA" --pages 5
+          pt-search search "CONSTRUCAO"  --pages 5

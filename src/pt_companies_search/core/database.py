@@ -1,0 +1,714 @@
+"""
+Database module for PT Companies
+PostgreSQL connection and operations
+"""
+
+import os
+import json
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
+from contextlib import contextmanager
+
+import polars as pl
+import psycopg2
+from psycopg2.extras import RealDictCursor, execute_values
+from psycopg2.pool import SimpleConnectionPool
+
+from pt_companies_search.core.config import config
+
+# Connection pool
+_pool: Optional[SimpleConnectionPool] = None
+
+
+def get_pool() -> SimpleConnectionPool:
+    """Get or create connection pool."""
+    global _pool
+    if _pool is None:
+        _pool = SimpleConnectionPool(
+            1, 10,
+            host=config.DB_HOST,
+            port=config.DB_PORT,
+            dbname=config.DB_NAME,
+            user=config.DB_USER,
+            password=config.DB_PASSWORD,
+        )
+    return _pool
+
+
+@contextmanager
+def get_connection():
+    """
+    Get a connection from the pool (NO transaction handling).
+    """
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+    finally:
+        pool.putconn(conn)
+
+
+@contextmanager
+def transaction():
+    """
+    Get a connection with AUTOMATIC transaction handling.
+    """
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@contextmanager
+def get_cursor(dict_cursor=True):
+    """
+    Get a cursor with automatic transaction handling.
+    """
+    with transaction() as conn:
+        cursor_factory = RealDictCursor if dict_cursor else None
+        with conn.cursor(cursor_factory=cursor_factory) as cur:
+            yield cur
+
+
+def test_connection() -> bool:
+    """Test database connection"""
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT 1")
+            return True
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        return False
+
+
+# ==================== COMPANY OPERATIONS ====================
+
+def upsert_company(company: Dict[str, Any]) -> bool:
+    """Insert or update a company record"""
+    # Ensure all required fields have defaults
+    safe_company = {
+        "nif": company.get("nif"),
+        "name": company.get("name"),
+        "source": company.get("source"),
+        "source_url": company.get("source_url"),
+        "registration_date": company.get("registration_date"),
+        "status": company.get("status"),
+        "phone": company.get("phone"),
+        "email": company.get("email"),
+        "website": company.get("website"),
+        "fax": company.get("fax"),
+        "address": company.get("address"),
+        "city": company.get("city"),
+        "postal_code": company.get("postal_code"),
+        "region": company.get("region"),
+        "county": company.get("county"),
+        "parish": company.get("parish"),
+        "cae": company.get("cae"),
+        "activity_description": company.get("activity_description"),
+        "sector": company.get("sector"),
+        "company_nature": company.get("company_nature"),
+        "capital": company.get("capital"),
+        "enriched_at": company.get("enriched_at"),
+    }
+    
+    is_enriched = company.get("source") == "nif_api"
+    
+    if is_enriched:
+        sql = """
+        INSERT INTO companies (
+            nif, name, source, source_url, registration_date, status,
+            phone, email, website, fax, address, city, postal_code,
+            region, county, parish, cae, activity_description, sector,
+            company_nature, capital, enriched_at
+        ) VALUES (
+            %(nif)s, %(name)s, %(source)s, %(source_url)s, %(registration_date)s, %(status)s,
+            %(phone)s, %(email)s, %(website)s, %(fax)s, %(address)s, %(city)s, %(postal_code)s,
+            %(region)s, %(county)s, %(parish)s, %(cae)s, %(activity_description)s, %(sector)s,
+            %(company_nature)s, %(capital)s, %(enriched_at)s
+        )
+        ON CONFLICT (nif) DO UPDATE SET
+            name = COALESCE(EXCLUDED.name, companies.name),
+            phone = EXCLUDED.phone,
+            email = EXCLUDED.email,
+            website = EXCLUDED.website,
+            fax = EXCLUDED.fax,
+            address = COALESCE(EXCLUDED.address, companies.address),
+            city = COALESCE(EXCLUDED.city, companies.city),
+            postal_code = COALESCE(EXCLUDED.postal_code, companies.postal_code),
+            region = COALESCE(EXCLUDED.region, companies.region),
+            county = COALESCE(EXCLUDED.county, companies.county),
+            parish = COALESCE(EXCLUDED.parish, companies.parish),
+            cae = COALESCE(EXCLUDED.cae, companies.cae),
+            activity_description = COALESCE(EXCLUDED.activity_description, companies.activity_description),
+            sector = COALESCE(EXCLUDED.sector, companies.sector),
+            status = COALESCE(EXCLUDED.status, companies.status),
+            enriched_at = EXCLUDED.enriched_at,
+            last_verified_at = NOW()
+        """
+    else:
+        sql = """
+        INSERT INTO companies (
+            nif, name, source, source_url, registration_date, status,
+            phone, email, website, fax, address, city, postal_code,
+            region, county, parish, cae, activity_description, sector,
+            company_nature, capital, enriched_at
+        ) VALUES (
+            %(nif)s, %(name)s, %(source)s, %(source_url)s, %(registration_date)s, %(status)s,
+            %(phone)s, %(email)s, %(website)s, %(fax)s, %(address)s, %(city)s, %(postal_code)s,
+            %(region)s, %(county)s, %(parish)s, %(cae)s, %(activity_description)s, %(sector)s,
+            %(company_nature)s, %(capital)s, %(enriched_at)s
+        )
+        ON CONFLICT (nif) DO UPDATE SET
+            name = EXCLUDED.name,
+            phone = COALESCE(EXCLUDED.phone, companies.phone),
+            email = COALESCE(EXCLUDED.email, companies.email),
+            website = COALESCE(EXCLUDED.website, companies.website),
+            address = COALESCE(EXCLUDED.address, companies.address),
+            city = COALESCE(EXCLUDED.city, companies.city),
+            postal_code = COALESCE(EXCLUDED.postal_code, companies.postal_code),
+            region = COALESCE(EXCLUDED.region, companies.region),
+            county = COALESCE(EXCLUDED.county, companies.county),
+            parish = COALESCE(EXCLUDED.parish, companies.parish),
+            cae = COALESCE(EXCLUDED.cae, companies.cae),
+            activity_description = COALESCE(EXCLUDED.activity_description, companies.activity_description),
+            sector = COALESCE(EXCLUDED.sector, companies.sector),
+            status = COALESCE(EXCLUDED.status, companies.status),
+            enriched_at = COALESCE(EXCLUDED.enriched_at, companies.enriched_at),
+            last_verified_at = NOW()
+        """
+    
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, safe_company)
+        return True
+    except Exception as e:
+        print(f"Error upserting company {company.get('nif')}: {e}")
+        return False
+
+
+def bulk_upsert_companies(companies: List[Dict[str, Any]]) -> int:
+    """Bulk insert/update companies"""
+    if not companies:
+        return 0
+    
+    sql = """
+    INSERT INTO companies (
+        nif, name, source, source_url, registration_date, status,
+        phone, email, website, address, city, postal_code,
+        region, county, cae, activity_description, sector
+    ) VALUES %s
+    ON CONFLICT (nif) DO UPDATE SET
+        name = EXCLUDED.name,
+        phone = COALESCE(EXCLUDED.phone, companies.phone),
+        email = COALESCE(EXCLUDED.email, companies.email),
+        website = COALESCE(EXCLUDED.website, companies.website),
+        city = COALESCE(EXCLUDED.city, companies.city),
+        region = COALESCE(EXCLUDED.region, companies.region),
+        sector = COALESCE(EXCLUDED.sector, companies.sector)
+    """
+    
+    values = [
+        (
+            c.get("nif"), c.get("name"), c.get("source"), c.get("source_url"),
+            c.get("registration_date"), c.get("status"),
+            c.get("phone"), c.get("email"), c.get("website"),
+            c.get("address"), c.get("city"), c.get("postal_code"),
+            c.get("region"), c.get("county"), c.get("cae"),
+            c.get("activity_description"), c.get("sector")
+        )
+        for c in companies
+    ]
+    
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            execute_values(cur, sql, values)
+        return len(companies)
+    except Exception as e:
+        print(f"Error bulk upserting companies: {e}")
+        return 0
+
+
+def get_company_by_nif(nif: str) -> Optional[Dict[str, Any]]:
+    """Get a company by NIF"""
+    sql = "SELECT * FROM companies WHERE nif = %s"
+    with get_cursor() as cur:
+        cur.execute(sql, (nif,))
+        result = cur.fetchone()
+        return dict(result) if result else None
+
+
+def search_companies(
+    query: Optional[str] = None,
+    sector: Optional[str] = None,
+    exclude_outro: bool = False,
+    region: Optional[str] = None,
+    city: Optional[str] = None,
+    source: Optional[str] = None,
+    has_phone: bool = False,
+    has_email: bool = False,
+    has_website: bool = False,
+    is_enriched: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0
+) -> List[Dict[str, Any]]:
+    """Search companies with filters"""
+    conditions = []
+    params = []
+    
+    if query:
+        conditions.append("search_vector @@ plainto_tsquery('portuguese', %s)")
+        params.append(query)
+    
+    if sector:
+        conditions.append("sector = %s")
+        params.append(sector)
+    
+    if exclude_outro:
+        conditions.append("sector != 'Outro'")
+    
+    if region:
+        conditions.append("region = %s")
+        params.append(region)
+    
+    if city:
+        conditions.append("city = %s")
+        params.append(city)
+    
+    if source:
+        conditions.append("source = %s")
+        params.append(source)
+    
+    if has_phone:
+        conditions.append("phone IS NOT NULL")
+    
+    if has_email:
+        conditions.append("email IS NOT NULL")
+    
+    if has_website:
+        conditions.append("website IS NOT NULL")
+    
+    if is_enriched is True:
+        conditions.append("enriched_at IS NOT NULL")
+    elif is_enriched is False:
+        conditions.append("enriched_at IS NULL")
+    
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+    
+    sql = f"""
+    SELECT * FROM companies
+    WHERE {where_clause}
+    ORDER BY 
+        CASE WHEN phone IS NOT NULL THEN 0 ELSE 1 END,
+        CASE WHEN email IS NOT NULL THEN 0 ELSE 1 END,
+        registration_date DESC NULLS LAST
+    LIMIT %s OFFSET %s
+    """
+    
+    params.extend([limit, offset])
+    
+    with get_cursor() as cur:
+        cur.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def count_companies(
+    query: Optional[str] = None,
+    sector: Optional[str] = None,
+    region: Optional[str] = None,
+    source: Optional[str] = None,
+) -> int:
+    """Count companies matching filters"""
+    conditions = []
+    params = []
+    
+    if query:
+        conditions.append("search_vector @@ plainto_tsquery('portuguese', %s)")
+        params.append(query)
+    
+    if sector:
+        conditions.append("sector = %s")
+        params.append(sector)
+
+    if region:
+        conditions.append("region = %s")
+        params.append(region)
+
+    if source:
+        conditions.append("source = %s")
+        params.append(source)
+
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+    sql = f"SELECT COUNT(*) as count FROM companies WHERE {where_clause}"
+    
+    with get_cursor() as cur:
+        cur.execute(sql, params)
+        result = cur.fetchone()
+        return result["count"] if result else 0
+
+
+def get_sector_stats() -> List[Dict[str, Any]]:
+    """Get statistics by sector"""
+    sql = """
+    SELECT 
+        sector,
+        COUNT(*) as total,
+        COUNT(phone) as with_phone,
+        COUNT(email) as with_email,
+        COUNT(website) as with_website
+    FROM companies
+    GROUP BY sector
+    ORDER BY total DESC
+    """
+    with get_cursor() as cur:
+        cur.execute(sql)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_region_stats() -> List[Dict[str, Any]]:
+    """Get statistics by region"""
+    sql = """
+    SELECT region, COUNT(*) as total FROM companies WHERE region IS NOT NULL GROUP BY region ORDER BY total DESC LIMIT 20
+    """
+    with get_cursor() as cur:
+        cur.execute(sql)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_city_stats(limit: int = 20) -> List[Dict[str, Any]]:
+    """Get statistics by city"""
+    sql = """
+    SELECT city, COUNT(*) as total FROM companies WHERE city IS NOT NULL AND city != '' GROUP BY city ORDER BY total DESC LIMIT %s
+    """
+    with get_cursor() as cur:
+        cur.execute(sql, (limit,))
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_source_stats() -> List[Dict[str, Any]]:
+    """Get statistics by source"""
+    sql = """
+    SELECT source, COUNT(*) as total, COUNT(phone) as with_phone, COUNT(email) as with_email, COUNT(website) as with_website FROM companies GROUP BY source ORDER BY total DESC
+    """
+    with get_cursor() as cur:
+        cur.execute(sql)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_contact_coverage() -> Dict[str, int]:
+    """Get overall contact coverage statistics"""
+    sql = """
+    SELECT COUNT(*) as total, COUNT(phone) as with_phone, COUNT(email) as with_email, COUNT(website) as with_website, COUNT(CASE WHEN phone IS NULL AND email IS NULL AND website IS NULL THEN 1 END) as no_contact FROM companies
+    """
+    with get_cursor() as cur:
+        cur.execute(sql)
+        result = cur.fetchone()
+        return dict(result) if result else {}
+
+
+def check_rate_limit(service: str) -> Dict[str, Any]:
+    """Check rate limit status for a service"""
+    sql = "SELECT * FROM rate_limits WHERE service = %s"
+    with get_cursor() as cur:
+        cur.execute(sql, (service,))
+        result = cur.fetchone()
+        return dict(result) if result else {}
+
+
+def increment_rate_limit(service: str) -> bool:
+    """Increment rate limit counter"""
+    sql = "UPDATE rate_limits SET requests_count = requests_count + 1, daily_count = daily_count + 1, monthly_count = monthly_count + 1 WHERE service = %s"
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, (service,))
+        return True
+    except Exception as e:
+        print(f"Error incrementing rate limit: {e}")
+        return False
+
+
+def reset_rate_limits(service: str) -> bool:
+    """Reset rate limit counters"""
+    sql = "UPDATE rate_limits SET requests_count = 0, window_start = NOW(), daily_count = 0, daily_start = NOW(), monthly_count = 0, monthly_start = NOW() WHERE service = %s"
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, (service,))
+        return True
+    except Exception as e:
+        print(f"Error resetting rate limits: {e}")
+        return False
+
+
+def log_enrichment(nif: str, source: str, status: str, error_message: str = None) -> bool:
+    """Log an enrichment attempt"""
+    sql = "INSERT INTO enrichment_log (nif, source, status, error_message) VALUES (%s, %s, %s, %s)"
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, (nif, source, status, error_message))
+        return True
+    except Exception as e:
+        print(f"Error logging enrichment: {e}")
+        return False
+
+
+# ==================== DASHBOARD HELPERS ====================
+
+def _read_db(sql: str) -> pl.DataFrame:
+    """Execute SQL and return a Polars DataFrame via ADBC."""
+    try:
+        return pl.read_database_uri(query=sql, uri=config.DB_URL, engine="adbc")
+    except Exception as e:
+        print(f"[db] query failed: {e}")
+        return pl.DataFrame()
+
+
+def get_einforma_dataframe() -> pl.DataFrame:
+    return _read_db("""
+        SELECT nif, name, source, source_url, registration_date,
+               phone, email, website, address, city, postal_code, region, sector
+        FROM companies
+        WHERE source IN ('einforma', 'debug')
+        ORDER BY registration_date DESC
+    """)
+
+
+def get_enriched_dataframe() -> pl.DataFrame:
+    return _read_db("""
+        SELECT nif, name, phone, email, website, fax, address,
+               city, postal_code, region, county, parish,
+               cae, activity_description, sector, company_nature, capital,
+               status, registration_date, enriched_at, source_url,
+               lead_status, lead_notes
+        FROM companies
+        WHERE enriched_at IS NOT NULL
+        ORDER BY enriched_at DESC
+    """)
+
+
+def get_search_dataframe() -> pl.DataFrame:
+    return _read_db("""
+        SELECT nif, name, source, source_url, phone, email, website, fax,
+               address, city, postal_code, region, county, parish,
+               sector, status, registration_date, fetched_at
+        FROM companies
+        WHERE source = 'nif_search'
+        ORDER BY fetched_at DESC
+    """)
+
+
+def get_nif_coverage() -> Dict[str, Dict]:
+    """Phone/email/website coverage for enriched and searched companies."""
+    def _query(source_filter: str) -> Dict[str, Any]:
+        sql = f"""
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE phone   IS NOT NULL) AS with_phone,
+            COUNT(*) FILTER (WHERE email   IS NOT NULL) AS with_email,
+            COUNT(*) FILTER (WHERE website IS NOT NULL) AS with_website,
+            COUNT(*) FILTER (WHERE phone IS NOT NULL OR email IS NOT NULL
+                                OR website IS NOT NULL) AS with_any_contact
+        FROM companies WHERE {source_filter}
+        """
+        with get_cursor() as cur:
+            cur.execute(sql)
+            row = dict(cur.fetchone())
+        total = row["total"] or 0
+        if total == 0:
+            return {**row, "phone_pct": 0, "email_pct": 0, "website_pct": 0, "contact_pct": 0}
+        return {
+            **row,
+            "phone_pct":   round((row["with_phone"]       or 0) / total * 100, 1),
+            "email_pct":   round((row["with_email"]        or 0) / total * 100, 1),
+            "website_pct": round((row["with_website"]      or 0) / total * 100, 1),
+            "contact_pct": round((row["with_any_contact"]  or 0) / total * 100, 1),
+        }
+
+    return {
+        "enriched": _query("source = 'nif_api' AND enriched_at IS NOT NULL"),
+        "searched": _query("source = 'nif_search'"),
+    }
+
+
+# ==================== LEADS WITHOUT CONTACT ROUTING ====================
+
+def has_contact_info(company: Dict[str, Any]) -> bool:
+    """Check if company has any contact information"""
+    return bool(
+        company.get("phone") or 
+        company.get("email") or 
+        company.get("website")
+    )
+
+
+def upsert_lead_without_contact(company: Dict[str, Any]) -> bool:
+    """Insert or update a lead without contact info in separate table"""
+    safe_company = {
+        "nif": company.get("nif"),
+        "name": company.get("name"),
+        "source": company.get("source"),
+        "source_url": company.get("source_url"),
+        "registration_date": company.get("registration_date"),
+        "status": company.get("status"),
+        "phone": company.get("phone"),
+        "email": company.get("email"),
+        "website": company.get("website"),
+        "fax": company.get("fax"),
+        "address": company.get("address"),
+        "city": company.get("city"),
+        "postal_code": company.get("postal_code"),
+        "region": company.get("region"),
+        "county": company.get("county"),
+        "parish": company.get("parish"),
+        "cae": company.get("cae"),
+        "activity_description": company.get("activity_description"),
+        "sector": company.get("sector"),
+        "company_nature": company.get("company_nature"),
+        "capital": company.get("capital"),
+        "enriched_at": company.get("enriched_at"),
+    }
+    
+    sql = """
+    INSERT INTO leads_without_personal_data (
+        nif, name, source, source_url, registration_date, status,
+        phone, email, website, fax, address, city, postal_code,
+        region, county, parish, cae, activity_description, sector,
+        company_nature, capital, enriched_at
+    ) VALUES (
+        %(nif)s, %(name)s, %(source)s, %(source_url)s, %(registration_date)s, %(status)s,
+        %(phone)s, %(email)s, %(website)s, %(fax)s, %(address)s, %(city)s, %(postal_code)s,
+        %(region)s, %(county)s, %(parish)s, %(cae)s, %(activity_description)s, %(sector)s,
+        %(company_nature)s, %(capital)s, %(enriched_at)s
+    )
+    ON CONFLICT (nif) DO UPDATE SET
+        name = COALESCE(EXCLUDED.name, leads_without_personal_data.name),
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        website = EXCLUDED.website,
+        address = COALESCE(EXCLUDED.address, leads_without_personal_data.address),
+        city = COALESCE(EXCLUDED.city, leads_without_personal_data.city),
+        postal_code = COALESCE(EXCLUDED.postal_code, leads_without_personal_data.postal_code),
+        region = COALESCE(EXCLUDED.region, leads_without_personal_data.region),
+        county = COALESCE(EXCLUDED.county, leads_without_personal_data.county),
+        parish = COALESCE(EXCLUDED.parish, leads_without_personal_data.parish),
+        cae = COALESCE(EXCLUDED.cae, leads_without_personal_data.cae),
+        activity_description = COALESCE(EXCLUDED.activity_description, leads_without_personal_data.activity_description),
+        sector = COALESCE(EXCLUDED.sector, leads_without_personal_data.sector),
+        status = COALESCE(EXCLUDED.status, leads_without_personal_data.status),
+        enriched_at = EXCLUDED.enriched_at,
+        last_verified_at = NOW()
+    """
+    
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, safe_company)
+        return True
+    except Exception as e:
+        print(f"Error upserting lead without contact {company.get('nif')}: {e}")
+        return False
+
+
+def get_leads(
+    lead_status: Optional[str] = None,
+    sector: Optional[str] = None,
+    region: Optional[str] = None,
+    query: Optional[str] = None,
+    limit: int = 500,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Get companies with phone numbers (callable leads)"""
+    conditions = ["phone IS NOT NULL"]
+    params: List[Any] = []
+
+    if lead_status:
+        conditions.append("lead_status = %s")
+        params.append(lead_status)
+
+    if sector:
+        conditions.append("sector = %s")
+        params.append(sector)
+
+    if region:
+        conditions.append("region = %s")
+        params.append(region)
+
+    if query:
+        conditions.append("(LOWER(name) LIKE %s OR LOWER(city) LIKE %s)")
+        like = f"%{query.lower()}%"
+        params.extend([like, like])
+
+    where = " AND ".join(conditions)
+    sql = f"""
+    SELECT nif, name, phone, email, website, city, region, county,
+           sector, cae, activity_description, company_nature, capital,
+           registration_date, enriched_at, lead_status, lead_notes, last_contacted_at
+    FROM companies
+    WHERE {where}
+    ORDER BY
+        CASE lead_status WHEN 'new' THEN 0 WHEN 'callback' THEN 1 ELSE 2 END,
+        registration_date DESC NULLS LAST
+    LIMIT %s OFFSET %s
+    """
+    params.extend([limit, offset])
+
+    with get_cursor() as cur:
+        cur.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def update_lead_status(nif: str, status: str, notes: Optional[str] = None) -> bool:
+    """Update lead status and optional notes"""
+    valid_statuses = {"new", "called", "callback", "interested", "not_interested", "no_answer", "invalid"}
+    if status not in valid_statuses:
+        return False
+
+    sql = """
+    UPDATE companies
+    SET lead_status = %s,
+        lead_notes = COALESCE(%s, lead_notes),
+        last_contacted_at = CASE WHEN %s != 'new' THEN NOW() ELSE last_contacted_at END
+    WHERE nif = %s
+    """
+    try:
+        with get_cursor(dict_cursor=False) as cur:
+            cur.execute(sql, (status, notes, status, nif))
+        return True
+    except Exception as e:
+        print(f"Error updating lead status for {nif}: {e}")
+        return False
+
+
+def get_lead_status_stats() -> Dict[str, int]:
+    """Get count of leads by status"""
+    sql = """
+    SELECT lead_status, COUNT(*) as count
+    FROM companies
+    WHERE phone IS NOT NULL
+    GROUP BY lead_status
+    ORDER BY count DESC
+    """
+    with get_cursor() as cur:
+        cur.execute(sql)
+        return {row["lead_status"] or "new": row["count"] for row in cur.fetchall()}
+
+
+def route_company_by_contact(company: Dict[str, Any]) -> str:
+    """
+    Route company to appropriate table based on contact availability.
+    Returns the table name where the company was saved.
+    """
+    if has_contact_info(company):
+        # Has contact info - save to main companies table
+        if upsert_company(company):
+            return "companies"
+        return "error"
+    else:
+        # No contact info - save to leads_without_personal_data
+        if upsert_lead_without_contact(company):
+            return "leads_without_personal_data"
+        return "error"

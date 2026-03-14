@@ -1,4 +1,3 @@
 include README.md
 include LICENSE
-recursive-include pt_companies_search/dashboard/pages *.py
-recursive-include pt_companies_search/dashboard/components *.py
+recursive-include src/pt_companies_search/dashboard/templates *.html
